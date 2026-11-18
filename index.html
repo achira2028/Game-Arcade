@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Len-Arcade</title>
+  <title>Len-Arcade · Multi-Game Hub</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -20,7 +20,7 @@
           </div>
           <div>
             <h1 class="hub-brand-title">LEN-ARCADE</h1>
-            <p class="hub-brand-sub">Board Games</p>
+            <p class="hub-brand-sub">Online Multiplayer &amp; AI Games</p>
           </div>
         </div>
 
@@ -43,7 +43,7 @@
         <section class="hub-catalog-panel">
           <div class="hub-section-header">
             <h2>เลือกเกมที่ต้องการเล่น</h2>
-            <span class="hub-game-count">2 เกมพร้อมเล่น</span>
+            <span class="hub-game-count">3 เกมพร้อมเล่น</span>
           </div>
 
           <div class="game-cards-grid" role="group" aria-label="Choose Game">
@@ -63,35 +63,36 @@
               <div class="gc-icon gc-discs">
                 <span class="disc-x"></span><span class="disc-o"></span>
               </div>
-              <div class="gc-title">หมากฮอส</div>
+              <div class="gc-title">หมากฮอสไทย</div>
               <div class="gc-desc">กระดาน 8×8 บังคับกิน กินต่อเนื่อง และเข้าฮอส</div>
             </button>
 
-            <!-- การ์ดเตรียมเพิ่มเกมที่ 3 -->
-            <button type="button" class="game-card coming-soon" onclick="alert('เร็วๆ นี้: กำลังเตรียมอัปเดตเกมเรียง 4 (Connect 4)')">
-              <div class="gc-badge soon">เร็วๆ นี้</div>
-              <div class="gc-icon gc-discs">
-                <span class="disc-o"></span><span class="disc-x"></span>
+            <!-- การ์ดเกมที่ 3: Color Switch (UNO) -->
+            <button type="button" class="game-tab game-card" data-game="uno">
+              <div class="gc-badge">UNO · AI</div>
+              <div class="gc-icon gc-cards-mini">
+                <span class="mini-card c-x">+2</span>
+                <span class="mini-card c-o">7</span>
               </div>
-              <div class="gc-title">ไม่รู้</div>
-              <div class="gc-desc">ไม่บอก</div>
+              <div class="gc-title">Color Switch (UNO)</div>
+              <div class="gc-desc">เกมไพ่ทิ้งสี 4 สี ลงการ์ด +2, Skip และเปลี่ยนสี</div>
             </button>
 
             <!-- การ์ดเตรียมเพิ่มเกมที่ 4 -->
-            <button type="button" class="game-card coming-soon" onclick="alert('เร็วๆ นี้: กำลังเตรียมอัปเดตเกมโอเทลโล่ (Othello)')">
+            <button type="button" class="game-card coming-soon" onclick="alert('เร็วๆ นี้: พื้นที่สำหรับเกมถัดไป')">
               <div class="gc-badge soon">เร็วๆ นี้</div>
               <div class="gc-icon gc-discs">
                 <span class="disc-light"></span><span class="disc-dark"></span>
               </div>
-              <div class="gc-title">ไม่รู้</div>
-              <div class="gc-desc">ไม่บอก</div>
+              <div class="gc-title">เกมใหม่ถัดไป</div>
+              <div class="gc-desc">รออัปเดตเกมกระดานเพิ่มเติมเร็วๆ นี้</div>
             </button>
           </div>
 
           <!-- ตารางจัดอันดับ Global Win Streak -->
           <div class="leaderboard-box hub-leaderboard">
             <div class="leaderboard-title">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55-.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
               <span>Top Win Streaks</span>
             </div>
             <ul id="leaderboard-list" class="leaderboard-list">
@@ -232,6 +233,9 @@
       <!-- กระดานหมากฮอสไทย (8x8) -->
       <div id="checkers-board" class="checkers-board" style="display: none;"></div>
 
+      <!-- โต๊ะเล่นเกมไพ่ UNO (Color Switch) -->
+      <div id="uno-board" class="uno-arena" style="display: none;"></div>
+
       <p class="kbd-hint" id="kbd-hint">Tip: press <kbd>1</kbd>&ndash;<kbd>9</kbd> to play &middot; <kbd>R</kbd> to restart</p>
     </main>
 
@@ -266,6 +270,7 @@
   <script src="js/ai.js"></script>
   <script src="js/checkersEngine.js"></script>
   <script src="js/checkersAi.js"></script>
+  <script src="js/unoEngine.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/effects.js"></script>
   <script type="module" src="js/app.js"></script>

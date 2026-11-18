@@ -1181,8 +1181,225 @@ body {
 @media (max-width: 560px) {
   .app-header, .app-footer { flex-direction: column; text-align: center; }
   .footer-controls, .header-right { justify-content: center; }
-}
+  
 
 @media (max-width: 440px) {
   .game-cards-grid { grid-template-columns: 1fr; }
 }
+
+  /* ================= COLOR SWITCH (UNO 4-COLOR) ARENA ================= */
+
+.gc-cards-mini {
+  gap: 5px;
+  letter-spacing: 0;
+}
+
+.mini-card {
+  width: 22px;
+  height: 26px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.mini-card.c-x { border: 1.5px solid var(--accent-x); color: var(--accent-x); }
+.mini-card.c-o { border: 1.5px solid var(--accent-o); color: var(--accent-o); }
+
+.uno-arena {
+  width: 100%;
+  max-width: 660px;
+  min-height: 360px;
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--board-bg);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.uno-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.uno-row-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+.uno-hand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+/* ไพ่ UNO 4 สี (Solid Dark + Colored Border/Text) */
+.uno-card {
+  position: relative;
+  width: clamp(50px, 10.5vw, 66px);
+  height: clamp(74px, 15vw, 94px);
+  border-radius: 10px;
+  background: #131d27;
+  border: 2px solid var(--border-hover);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  user-select: none;
+  transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+.uno-card.color-cyan   { border-color: #22e0ff; color: #22e0ff; background: rgba(34, 224, 255, 0.1); }
+.uno-card.color-pink   { border-color: #ff5f81; color: #ff5f81; background: rgba(255, 95, 129, 0.1); }
+.uno-card.color-violet { border-color: #b18cff; color: #b18cff; background: rgba(177, 140, 255, 0.1); }
+.uno-card.color-amber  { border-color: #ffb85c; color: #ffb85c; background: rgba(255, 184, 92, 0.1); }
+.uno-card.color-wild   { border-color: #eef3f7; color: #eef3f7; background: rgba(255, 255, 255, 0.08); }
+
+.uno-card .u-main {
+  font-size: clamp(1rem, 2.6vw, 1.35rem);
+  letter-spacing: -0.02em;
+}
+
+.uno-card .u-sub {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+.uno-card.playable {
+  cursor: pointer;
+}
+
+.uno-card.playable:hover {
+  transform: translateY(-7px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+.uno-card.unplayable {
+  opacity: 0.36;
+  cursor: not-allowed;
+}
+
+/* หลังไพ่คู่แข่ง & กองจั่ว */
+.uno-card.card-back {
+  width: 34px;
+  height: 48px;
+  border-radius: 7px;
+  border-width: 1.5px;
+  background-color: #162330;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%);
+  background-size: 10px 10px;
+}
+
+.uno-center-table {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 4vw, 32px);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(17, 25, 33, 0.7);
+  border: 1px solid var(--border-subtle);
+}
+
+.uno-deck-btn {
+  width: clamp(54px, 11vw, 68px);
+  height: clamp(76px, 15.5vw, 96px);
+  border-radius: 10px;
+  background: #182532;
+  border: 1.5px dashed var(--slate);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.74rem;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.uno-deck-btn:hover:not(:disabled) {
+  border-color: var(--accent-x);
+  background: var(--accent-x-soft);
+  color: var(--accent-x);
+}
+
+.uno-deck-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.uno-color-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--slate);
+}
+
+.active-color-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  border: 1.5px solid currentColor;
+}
+
+.active-color-pill.cyan   { color: #22e0ff; background: rgba(34, 224, 255, 0.14); }
+.active-color-pill.pink   { color: #ff5f81; background: rgba(255, 95, 129, 0.14); }
+.active-color-pill.violet { color: #b18cff; background: rgba(177, 140, 255, 0.14); }
+.active-color-pill.amber  { color: #ffb85c; background: rgba(255, 184, 92, 0.14); }
+
+/* แถบเลือกสีเมื่อลงการ์ด WILD */
+.wild-picker-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(17, 25, 33, 0.92);
+  border: 1px solid var(--border-hover);
+}
+
+.wild-color-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1.5px solid currentColor;
+  background: transparent;
+}
+
+.wild-color-btn.cyan   { color: #22e0ff; }
+.wild-color-btn.pink   { color: #ff5f81; }
+.wild-color-btn.violet { color: #b18cff; }
+.wild-color-btn.amber  { color: #ffb85c; }
+.wild-color-btn:hover  { background: rgba(255, 255, 255, 0.1); }

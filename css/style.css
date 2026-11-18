@@ -1,4 +1,4 @@
-/* style.css - Complete HUD, Board, and Home Overlay */
+/* style.css - Complete HUD, Board, Home Overlay & Leaderboard */
 
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
 
@@ -545,7 +545,7 @@ body {
   transform: scale(1.04);
 }
 
-/* Home Overlay & Online UI */
+/* ================= HOME OVERLAY & LEADERBOARD ================= */
 .home-overlay {
   position: fixed;
   inset: 0;
@@ -553,7 +553,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 16px;
+  overflow-y: auto;
   background:
     radial-gradient(circle at 15% 15%, rgba(var(--accent-x-rgb), 0.14), transparent 42%),
     radial-gradient(circle at 85% 85%, rgba(var(--accent-o-rgb), 0.14), transparent 42%),
@@ -569,8 +570,8 @@ body {
 
 .home-card {
   width: 100%;
-  max-width: 390px;
-  padding: 32px 26px;
+  max-width: 400px;
+  padding: 26px 24px;
   border-radius: var(--radius-lg);
   background: rgba(28, 43, 56, 0.85);
   backdrop-filter: blur(18px);
@@ -578,14 +579,15 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: var(--shadow-lg);
   text-align: center;
+  margin: auto;
 }
 
 .home-logo {
   font-family: var(--font-display);
-  font-size: 2.3rem;
+  font-size: 2.1rem;
   font-weight: 800;
   letter-spacing: 6px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .home-logo .logo-x {
@@ -601,40 +603,40 @@ body {
 .home-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 1.65rem;
   font-weight: 800;
   letter-spacing: 1px;
   color: var(--text);
 }
 
 .home-subtitle {
-  margin: 4px 0 22px;
-  font-size: 0.85rem;
+  margin: 4px 0 16px;
+  font-size: 0.82rem;
   color: var(--muted);
 }
 
 .home-field {
   text-align: left;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .home-label {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 600;
   color: var(--slate);
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .home-input {
   width: 100%;
-  padding: 11px 14px;
+  padding: 10px 14px;
   border-radius: var(--radius-md);
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(22, 34, 45, 0.75);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -653,7 +655,7 @@ body {
   margin-top: 8px;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--thinking);
   background: var(--thinking-soft);
@@ -663,15 +665,15 @@ body {
 .home-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .home-btn {
   width: 100%;
-  padding: 12px 16px;
+  padding: 11px 16px;
   border-radius: 999px;
   font-family: var(--font-body);
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
   border: none;
@@ -710,26 +712,26 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 8px;
-  padding-top: 14px;
+  margin-top: 4px;
+  padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .home-code-input {
   flex: 0 0 115px;
   width: 115px;
-  padding: 11px 10px;
+  padding: 10px 10px;
   text-align: center;
   letter-spacing: 3px;
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   border-radius: 999px;
 }
 
 .home-btn-secondary {
   flex: 1;
-  padding: 12px 16px;
+  padding: 11px 16px;
   background: rgba(255, 255, 255, 0.09);
   color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -741,6 +743,75 @@ body {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* Global Win Streak Leaderboard */
+.leaderboard-box {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+}
+
+.leaderboard-title {
+  font-family: var(--font-display);
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--slate);
+  margin-bottom: 8px;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.leaderboard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 155px;
+  overflow-y: auto;
+}
+
+.leaderboard-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(22, 34, 45, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 0.8rem;
+}
+
+.leaderboard-name {
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 190px;
+}
+
+.leaderboard-rank {
+  font-weight: 700;
+  color: var(--accent-x);
+  margin-right: 6px;
+}
+
+.leaderboard-streak {
+  font-weight: 700;
+  color: var(--thinking);
+  white-space: nowrap;
+}
+
+.leaderboard-empty {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding: 6px 0;
+}
+
+/* Online Room Bar & Live Streak Pill */
 .online-room-bar {
   display: flex;
   align-items: center;

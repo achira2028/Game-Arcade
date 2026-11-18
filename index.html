@@ -3,20 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>XO &amp; OX</title>
+  <title>Len-XO &amp; Checkers Online</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-  <!-- ================= HOME OVERLAY (หน้าแรก + Global Win Streak Rank) ================= -->
+  <!-- ================= HOME OVERLAY (เลือกเกม + โหมดเล่น) ================= -->
   <div id="home-overlay" class="home-overlay">
     <div class="home-card">
-      <div class="home-logo">
+      <div class="home-logo" id="home-logo-icon">
         <span class="logo-x">✕</span>
         <span class="logo-o">○</span>
       </div>
-      <h1 class="home-title">TIC-TAC-TOE</h1>
-      <p class="home-subtitle">เล่นยังไงก็ไม่ชนะหรอก </p>
+      <h1 class="home-title" id="home-game-title">TIC-TAC-TOE</h1>
+      <p class="home-subtitle">Classic &amp; Online Multiplayer</p>
+
+      <!-- แถบเลือกเกมที่จะเล่น -->
+      <div class="game-selector" role="group" aria-label="Choose Game">
+        <button type="button" class="game-tab active" data-game="xo">❌⭕ Tic-Tac-Toe</button>
+        <button type="button" class="game-tab" data-game="checkers">♟️ หมากฮอสไทย</button>
+      </div>
 
       <!-- ช่องตั้งชื่อเล่น & ป้าย Best Win Streak -->
       <div class="home-field">
@@ -54,14 +60,14 @@
       </div>
     </div>
   </div>
-  <!-- =================================================================================== -->
+  <!-- ======================================================================= -->
 
   <div class="app">
 
     <!-- Header -->
     <header class="app-header">
       <div class="brand">
-        <h1>Tic-Tac-Toe</h1>
+        <h1 id="header-game-title">Tic-Tac-Toe</h1>
         <p class="subtitle">
           <span id="player-role-label">You are</span> <span class="mark-x" id="mark-x">X</span> &middot; 
           <span id="opponent-role-label">Computer is</span> <span class="mark-o" id="mark-o">O</span>
@@ -90,7 +96,7 @@
         </div>
 
         <button type="button" id="mute-btn" class="icon-btn" aria-label="Mute sound" aria-pressed="false">🔊</button>
-        <button type="button" id="home-nav-btn" class="icon-btn" aria-label="Back to Home" title="กลับหน้าแรก">🏠</button>
+        <button type="button" id="home-nav-btn" class="icon-btn" aria-label="Back to Home" title="เปลี่ยนเกม / กลับหน้าแรก">🏠</button>
       </div>
     </header>
 
@@ -104,6 +110,7 @@
     <main class="board-container">
       <p id="status" class="status" role="status" aria-live="polite">Your turn (X)</p>
 
+      <!-- กระดาน Tic-Tac-Toe (3x3) -->
       <div id="board" class="board">
         <button class="cell" data-index="0" aria-label="Cell 1"></button>
         <button class="cell" data-index="1" aria-label="Cell 2"></button>
@@ -116,7 +123,10 @@
         <button class="cell" data-index="8" aria-label="Cell 9"></button>
       </div>
 
-      <p class="kbd-hint">Tip: press <kbd>1</kbd>&ndash;<kbd>9</kbd> to play &middot; <kbd>R</kbd> to restart</p>
+      <!-- กระดานหมากฮอสไทย (8x8) -->
+      <div id="checkers-board" class="checkers-board" style="display: none;"></div>
+
+      <p class="kbd-hint" id="kbd-hint">Tip: press <kbd>1</kbd>&ndash;<kbd>9</kbd> to play &middot; <kbd>R</kbd> to restart</p>
     </main>
 
     <!-- Footer -->
@@ -130,7 +140,7 @@
           </div>
         </div>
 
-        <div class="skin-picker">
+        <div class="skin-picker" id="skin-picker-control">
           <span class="skin-label">Skin:</span>
           <button type="button" id="skin-btn" class="skin-btn" aria-label="Change player symbols">X O</button>
         </div>
@@ -148,6 +158,8 @@
 
   <script src="js/gameEngine.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/checkersEngine.js"></script>
+  <script src="js/checkersAi.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/effects.js"></script>
   <script type="module" src="js/app.js"></script>

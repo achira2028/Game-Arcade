@@ -3,18 +3,61 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>XO &amp; OX </title>
+  <title>Tic-Tac-Toe Online &amp; Unbeatable AI</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
+  <!-- ================= HOME OVERLAY (หน้าแรกแบบ Clean Glassmorphism) ================= -->
+  <div id="home-overlay" class="home-overlay">
+    <div class="home-card">
+      <div class="home-logo">
+        <span class="logo-x">✕</span>
+        <span class="logo-o">○</span>
+      </div>
+      <h1 class="home-title">TIC-TAC-TOE</h1>
+      <p class="home-subtitle">Classic &amp; Online Multiplayer</p>
+
+      <!-- ช่องตั้งชื่อเล่น & ป้าย Best Win Streak -->
+      <div class="home-field">
+        <label for="nickname-input" class="home-label">Nickname</label>
+        <input type="text" id="nickname-input" class="home-input" placeholder="Player 1" maxlength="15" />
+        <div id="home-best-streak" class="best-streak-badge" style="display: none;">
+          🔥 Best Streak: <span id="best-streak-value">0</span> Wins
+        </div>
+      </div>
+
+      <!-- ปุ่มเลือกโหมดเล่น -->
+      <div class="home-actions">
+        <button type="button" id="home-play-ai-btn" class="home-btn home-btn-primary">
+          🤖 Play vs AI
+        </button>
+
+        <button type="button" id="home-create-room-btn" class="home-btn home-btn-outline">
+          🌐 Create Online Room
+        </button>
+
+        <div class="home-join-group">
+          <input type="text" id="home-room-code-input" class="home-input home-code-input" placeholder="0000" maxlength="4" inputmode="numeric" />
+          <button type="button" id="home-join-room-btn" class="home-btn home-btn-secondary">
+            Join Room
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ================================================================================= -->
+
   <div class="app">
 
-    <!-- Header: pinned to the top — brand on the left, live stats on the right. -->
+    <!-- Header -->
     <header class="app-header">
       <div class="brand">
         <h1>Tic-Tac-Toe</h1>
-        <p class="subtitle">You are <span class="mark-x" id="mark-x">X</span> &middot; <span id="opponent-label">Computer is</span> <span class="mark-o" id="mark-o">O</span></p>
+        <p class="subtitle">
+          <span id="player-role-label">You are</span> <span class="mark-x" id="mark-x">X</span> &middot; 
+          <span id="opponent-role-label">Computer is</span> <span class="mark-o" id="mark-o">O</span>
+        </p>
       </div>
 
       <div class="header-right">
@@ -39,19 +82,17 @@
         </div>
 
         <button type="button" id="mute-btn" class="icon-btn" aria-label="Mute sound" aria-pressed="false">🔊</button>
+        <button type="button" id="home-nav-btn" class="icon-btn" aria-label="Back to Home" title="กลับหน้าแรก">🏠</button>
       </div>
     </header>
 
-    <!-- แถบควบคุมโหมดเล่นออนไลน์กับเพื่อน (Multiplayer Lobby) -->
-    <div class="multiplayer-bar" style="display: flex; gap: 8px; justify-content: center; align-items: center; padding: 10px 16px; flex-wrap: wrap;">
-      <button type="button" id="create-room-btn" class="restart-btn" style="padding: 6px 14px; font-size: 0.9rem;">สร้างห้อง (เล่นกับเพื่อน)</button>
-      <input type="text" id="room-code-input" placeholder="เลขห้อง 4 หลัก" maxlength="4" style="width: 120px; padding: 6px 10px; border-radius: 6px; border: 1px solid #444; background: rgba(255,255,255,0.1); color: inherit; text-align: center;" />
-      <button type="button" id="join-room-btn" class="restart-btn" style="padding: 6px 14px; font-size: 0.9rem;">เข้าห้อง</button>
-      <button type="button" id="leave-room-btn" class="toggle-btn" style="display: none; padding: 6px 12px; font-size: 0.9rem;">กลับไปเล่นกับ AI</button>
-      <span id="room-info" style="font-size: 0.9rem; font-weight: bold;"></span>
+    <!-- แถบแจ้งสถานะห้องออนไลน์ & ปุ่ม Copy Link (แสดงเฉพาะตอนเล่นออนไลน์) -->
+    <div id="online-room-bar" class="online-room-bar" style="display: none;">
+      <span id="room-info-text" class="room-info-text">Room #0000</span>
+      <button type="button" id="copy-link-btn" class="copy-link-btn">📋 Copy Link</button>
     </div>
 
-    <!-- Board container: flex-grow fills the middle space and centers the board. -->
+    <!-- Board container -->
     <main class="board-container">
       <p id="status" class="status" role="status" aria-live="polite">Your turn (X)</p>
 
@@ -70,10 +111,10 @@
       <p class="kbd-hint">Tip: press <kbd>1</kbd>&ndash;<kbd>9</kbd> to play &middot; <kbd>R</kbd> to restart</p>
     </main>
 
-    <!-- Footer: pinned to the bottom — round settings and the play-again control. -->
+    <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-controls">
-        <div class="first-player" role="group" aria-label="Choose who goes first">
+        <div class="first-player" id="first-player-control" role="group" aria-label="Choose who goes first">
           <span class="first-player-label">First move:</span>
           <div class="first-player-toggle">
             <button type="button" class="toggle-btn" id="first-player-human" data-player="human" aria-pressed="true">You (X)</button>
@@ -86,7 +127,7 @@
           <button type="button" id="skin-btn" class="skin-btn" aria-label="Change player symbols">X O</button>
         </div>
 
-        <div class="difficulty" aria-label="AI difficulty">
+        <div class="difficulty" aria-label="Game mode">
           <span class="difficulty-label">Mode:</span>
           <span class="difficulty-badge" id="mode-badge">Minimax AI &middot; Unbeatable</span>
         </div>
@@ -97,7 +138,6 @@
 
   </div>
 
-  <!-- Load order matters: engine -> AI (depends on engine) -> UI -> effects -> app (depends on all) -->
   <script src="js/gameEngine.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/ui.js"></script>

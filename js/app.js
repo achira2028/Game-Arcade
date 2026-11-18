@@ -21,6 +21,8 @@ const App = (() => {
   const AI_THINK_DELAY_MS = 400;
   const SCORES_STORAGE_KEY = 'tic-tac-toe-scores';
   const SKIN_STORAGE_KEY = 'tic-tac-toe-skin';
+  const NICKNAME_STORAGE_KEY = 'tic-tac-toe-nickname';
+  const BEST_STREAK_STORAGE_KEY = 'tic-tac-toe-best-streak';
 
   const SKINS = [
     { id: 'classic', x: 'X', o: 'O' },
@@ -48,10 +50,14 @@ const App = (() => {
   let elapsedSeconds = 0;
   let timerIntervalId = null;
 
-  // --- ตัวแปรสำหรับโหมดออนไลน์ (Multiplayer) ---
+  // ข้อมูลผู้เล่น & สถิติ
+  let nickname = loadNickname();
+  let bestStreak = loadBestStreak();
+
+  // ตัวแปรโหมดออนไลน์
   let isOnline = false;
   let currentRoomId = null;
-  let mySymbol = null; // 'X' หรือ 'O'
+  let mySymbol = null;
   let roomListenerRef = null;
   let lastOnlineRound = 0;
   let handledEndRound = 0;
@@ -70,32 +76,142 @@ const App = (() => {
     UI.setMuted(Effects.isMuted());
     document.addEventListener('keydown', handleKeyDown);
 
-    setupMultiplayerUI();
-    startRound();
+    setupHomeAndNavigation();
+
+    // ตรวจสอบว่าเปิดมาจากลิงก์เชิญ (?room=XXXX) หรือไม่
+    const urlParams = new URLSearchParams(window.location.search);
+    const autoRoomCode = urlParams.get('room');
+    if (autoRoomCode && autoRoomCode.length === 4) {
+      hideHomeOverlay();
+      joinOnlineRoom(autoRoomCode);
+    } else {
+      showHomeOverlay();
+    }
   }
 
-  /** เชื่อมต่อปุ่มสร้างห้อง / เข้าห้อง ใน index.html */
-  function setupMultiplayerUI() {
-    const createBtn = document.getElementById('create-room-btn');
-    const joinBtn = document.getElementById('join-room-btn');
-    const leaveBtn = document.getElementById('leave-room-btn');
-    const codeInput = document.getElementById('room-code-input');
+  /** ตั้งค่าหน้าแรกและปุ่มนำทาง */
+  function setupHomeAndNavigation() {
+    const nickInput = document.getElementById('nickname-input');
+    const playAiBtn = document.getElementById('home-play-ai-btn');
+    const createRoomBtn = document.getElementById('home-create-room-btn');
+    const joinRoomBtn = document.getElementById('home-join-room-btn');
+    const codeInput = document.getElementById('home-room-code-input');
+    const homeNavBtn = document.getElementById('home-nav-btn');
+    const copyLinkBtn = document.getElementById('copy-link-btn');
 
-    if (createBtn) createBtn.addEventListener('click', createOnlineRoom);
-    if (joinBtn) {
-      joinBtn.addEventListener('click', () => {
+    if (nickInput) {
+      nickInput.value = nickname;
+      nickInput.addEventListener('input', () => {
+        nickname = nickInput.value.trim() || 'Player 1';
+        saveNickname(nickname);
+      });
+    }
+
+    if (playAiBtn) {
+      playAiBtn.addEventListener('click', () => {
+        syncNicknameFromInput();
+        hideHomeOverlay();
+        switchToAiMode();
+      });
+    }
+
+    if (createRoomBtn) {
+      createRoomBtn.addEventListener('click', () => {
+        syncNicknameFromInput();
+        hideHomeOverlay();
+        createOnlineRoom();
+      });
+    }
+
+    if (joinRoomBtn) {
+      joinRoomBtn.addEventListener('click', () => {
+        syncNicknameFromInput();
         const code = codeInput ? codeInput.value.trim() : '';
         if (code.length === 4) {
+          hideHomeOverlay();
           joinOnlineRoom(code);
         } else {
           alert('กรุณากรอกเลขห้อง 4 หลักครับ');
         }
       });
     }
-    if (leaveBtn) leaveBtn.addEventListener('click', leaveOnlineRoom);
+
+    if (homeNavBtn) {
+      homeNavBtn.addEventListener('click', () => {
+        if (isOnline) leaveOnlineRoom();
+        stopTimer();
+        showHomeOverlay();
+      });
+    }
+
+    if (copyLinkBtn) {
+      copyLinkBtn.addEventListener('click', () => {
+        if (!currentRoomId) return;
+        const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${currentRoomId}`;
+        navigator.clipboard.writeText(inviteUrl).then(() => {
+          const orig = copyLinkBtn.textContent;
+          copyLinkBtn.textContent = '✅ Copied!';
+          setTimeout(() => { copyLinkBtn.textContent = orig; }, 2000);
+        });
+      });
+    }
   }
 
-  /** 1. สร้างห้องเล่นออนไลน์ (เจ้าของห้องเล่นเป็น X) */
+  function syncNicknameFromInput() {
+    const nickInput = document.getElementById('nickname-input');
+    if (nickInput) {
+      nickname = nickInput.value.trim() || 'Player 1';
+      saveNickname(nickname);
+    }
+  }
+
+  function showHomeOverlay() {
+    const overlay = document.getElementById('home-overlay');
+    const bestBadge = document.getElementById('home-best-streak');
+    const bestVal = document.getElementById('best-streak-value');
+
+    bestStreak = loadBestStreak();
+    if (bestBadge && bestVal) {
+      if (bestStreak >= 1) {
+        bestVal.textContent = bestStreak;
+        bestBadge.style.display = 'inline-block';
+      } else {
+        bestBadge.style.display = 'none';
+      }
+    }
+    if (overlay) overlay.classList.remove('hidden');
+  }
+
+  function hideHomeOverlay() {
+    const overlay = document.getElementById('home-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
+  /** เข้าสู่โหมดเล่นกับ AI */
+  function switchToAiMode() {
+    isOnline = false;
+    currentRoomId = null;
+    mySymbol = null;
+
+    const roomBar = document.getElementById('online-room-bar');
+    const firstMoveCtrl = document.getElementById('first-player-control');
+    const modeBadge = document.getElementById('mode-badge');
+    const oppRole = document.getElementById('opponent-role-label');
+    const scoreLabelPlayer = document.getElementById('score-label-player');
+    const scoreLabelAi = document.getElementById('score-label-ai');
+
+    if (roomBar) roomBar.style.display = 'none';
+    if (firstMoveCtrl) firstMoveCtrl.style.display = 'flex';
+    if (modeBadge) modeBadge.innerHTML = 'Minimax AI &middot; Unbeatable';
+    if (oppRole) oppRole.textContent = 'Computer is';
+    if (scoreLabelPlayer) scoreLabelPlayer.textContent = `${nickname} (X)`;
+    if (scoreLabelAi) scoreLabelAi.textContent = 'AI (O)';
+
+    UI.renderScoreboard(scores);
+    startRound();
+  }
+
+  /** สร้างห้องเล่นออนไลน์ (X) */
   async function createOnlineRoom() {
     const roomId = Math.floor(1000 + Math.random() * 9000).toString();
     currentRoomId = roomId;
@@ -104,34 +220,37 @@ const App = (() => {
     lastOnlineRound = 1;
     handledEndRound = 0;
 
-    // Firebase ไม่เก็บค่า null ใน Array จึงแปลงเป็น "" ชั่วคราวตอนส่ง
-    const emptyBoard = Array(9).fill("");
-
     await set(ref(db, 'rooms/' + roomId), {
-      board: emptyBoard,
+      board: Array(9).fill(""),
       turn: 'X',
       status: 'waiting',
       round: 1,
-      scores: { X: 0, O: 0, ties: 0 }
+      players: { X: nickname, O: 'Friend' },
+      scores: { X: 0, O: 0, ties: 0 },
+      streaks: { X: 0, O: 0 }
     });
 
-    updateLobbyUI(true, `รหัสห้อง: ${roomId} (คุณคือ X) - ส่งเลขนี้ให้เพื่อนเลย!`);
+    setupOnlineModeUI(roomId, true);
     listenToRoom(roomId);
   }
 
-  /** 2. เข้าร่วมห้องเล่นออนไลน์ (ผู้เข้าร่วมเล่นเป็น O) */
+  /** เข้าร่วมห้องเล่นออนไลน์ (O) */
   async function joinOnlineRoom(roomId) {
     const roomRef = ref(db, 'rooms/' + roomId);
     const snapshot = await get(roomRef);
 
     if (!snapshot.exists()) {
       alert('ไม่พบรหัสห้องนี้ กรุณาตรวจสอบเลข 4 หลักอีกครั้งครับ');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      showHomeOverlay();
       return;
     }
 
     const data = snapshot.val();
     if (data.status !== 'waiting') {
       alert('ห้องนี้มีผู้เล่นครบ 2 คนแล้วครับ');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      showHomeOverlay();
       return;
     }
 
@@ -141,12 +260,40 @@ const App = (() => {
     lastOnlineRound = data.round || 1;
     handledEndRound = 0;
 
-    await update(roomRef, { status: 'playing' });
-    updateLobbyUI(true, `อยู่ในห้อง: ${roomId} (คุณคือ O)`);
+    await update(roomRef, {
+      status: 'playing',
+      'players/O': nickname
+    });
+
+    setupOnlineModeUI(roomId, false);
     listenToRoom(roomId);
   }
 
-  /** 3. ดักฟังข้อมูลเรียลไทม์จาก Firebase */
+  function setupOnlineModeUI(roomId, isHost) {
+    const roomBar = document.getElementById('online-room-bar');
+    const roomInfoText = document.getElementById('room-info-text');
+    const copyLinkBtn = document.getElementById('copy-link-btn');
+    const firstMoveCtrl = document.getElementById('first-player-control');
+    const modeBadge = document.getElementById('mode-badge');
+    const oppRole = document.getElementById('opponent-role-label');
+
+    if (roomBar) roomBar.style.display = 'flex';
+    if (roomInfoText) roomInfoText.textContent = `Room #${roomId} (คุณคือ ${mySymbol})`;
+    if (copyLinkBtn) copyLinkBtn.style.display = isHost ? 'inline-block' : 'none';
+    if (firstMoveCtrl) firstMoveCtrl.style.display = 'none';
+    if (modeBadge) modeBadge.textContent = `Online Room #${roomId}`;
+    if (oppRole) oppRole.textContent = 'Friend is';
+
+    // อัปเดตสัญลักษณ์ใน Subtitle ให้ตรงกับฝั่งที่เราเล่น
+    const markX = document.getElementById('mark-x');
+    const markO = document.getElementById('mark-o');
+    if (markX && markO) {
+      markX.textContent = mySymbol;
+      markO.textContent = mySymbol === 'X' ? 'O' : 'X';
+    }
+  }
+
+  /** ดักฟังสถานะห้องออนไลน์แบบเรียลไทม์ */
   function listenToRoom(roomId) {
     if (roomListenerRef) off(roomListenerRef);
     roomListenerRef = ref(db, 'rooms/' + roomId);
@@ -155,11 +302,9 @@ const App = (() => {
       const data = snapshot.val();
       if (!data) return;
 
-      // แปลง "" จาก Firebase กลับมาเป็น null เพื่อให้ตรงกับ gameEngine.js เดิม
-      const syncedBoard = (data.board || Array(9).fill("")).map(cell => cell === "" ? null : cell);
+      const syncedBoard = (data.board || Array(9).fill("")).map(c => c === "" ? null : c);
       const isBoardChanged = JSON.stringify(board) !== JSON.stringify(syncedBoard);
 
-      // ตรวจจับการกดเริ่มรอบใหม่ (Play Again)
       if (data.round !== lastOnlineRound) {
         lastOnlineRound = data.round;
         handledEndRound = 0;
@@ -170,30 +315,53 @@ const App = (() => {
       if (isBoardChanged) {
         board = syncedBoard;
         render();
-        // เล่นเสียงเดินหมากเมื่อมีหมากลงบนกระดาน
         if (board.some(c => c !== null)) {
           Effects.playMove(data.turn === 'X' ? 'O' : 'X');
         }
       }
 
-      // อัปเดตสกอร์บอร์ดในห้องออนไลน์
+      // อัปเดตชื่อผู้เล่น คะแนน และป้าย 🔥 Win Streak
+      const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
+      const myName = (data.players && data.players[mySymbol]) || nickname;
+      const oppName = (data.players && data.players[oppSymbol]) || 'Friend';
+      const myStreak = (data.streaks && data.streaks[mySymbol]) || 0;
+      const oppStreak = (data.streaks && data.streaks[oppSymbol]) || 0;
+
+      // บันทึก Best Streak ลงเครื่องหากทำลายสถิติเดิม
+      if (myStreak > bestStreak) {
+        bestStreak = myStreak;
+        saveBestStreak(bestStreak);
+      }
+
+      const scoreLabelPlayer = document.getElementById('score-label-player');
+      const scoreLabelAi = document.getElementById('score-label-ai');
+
+      if (scoreLabelPlayer) {
+        const streakTag = myStreak >= 2 ? `<span class="streak-pill">🔥${myStreak}</span>` : '';
+        scoreLabelPlayer.innerHTML = `${escapeHtml(myName)} (${mySymbol}) ${streakTag}`;
+      }
+      if (scoreLabelAi) {
+        const oppStreakTag = oppStreak >= 2 ? `<span class="streak-pill">🔥${oppStreak}</span>` : '';
+        scoreLabelAi.innerHTML = `${escapeHtml(oppName)} (${oppSymbol}) ${oppStreakTag}`;
+      }
+
       if (data.scores) {
         UI.renderScoreboard({
-          player: mySymbol === 'X' ? data.scores.X : data.scores.O,
-          ai: mySymbol === 'X' ? data.scores.O : data.scores.X,
-          ties: data.scores.ties
+          player: data.scores[mySymbol] || 0,
+          ai: data.scores[oppSymbol] || 0,
+          ties: data.scores.ties || 0
         });
       }
 
       if (data.status === 'waiting') {
         currentState = State.ONLINE_WAIT;
         UI.setBoardInteractive(false);
-        UI.setStatus(`รอเพื่อนเข้าห้อง... (รหัส: ${roomId})`);
+        UI.setStatus(`รอเพื่อนเข้าห้อง... (ส่งลิงก์หรือเลข ${roomId})`);
         stopTimer();
         return;
       }
 
-      // เช็กผลแพ้ชนะจาก gameEngine.js เดิม
+      // ตรวจสอบผลแพ้ชนะ
       const status = GameEngine.getGameStatus(board);
       if (status.status !== 'in-progress') {
         currentState = State.GAME_OVER;
@@ -203,13 +371,13 @@ const App = (() => {
         if (status.status === 'win') {
           UI.highlightWinningLine(status.line);
           if (status.winner === mySymbol) {
-            UI.setStatus('You win! 🎉');
+            UI.setStatus(`${myName} wins! 🎉`);
             if (handledEndRound !== data.round) {
               Effects.playWin();
               Effects.confettiBurst(getAccentRgb('--accent-x-rgb', '34, 224, 255'));
             }
           } else {
-            UI.setStatus('Friend wins! 😢');
+            UI.setStatus(`${oppName} wins!`);
             if (handledEndRound !== data.round) Effects.playLose();
           }
         } else {
@@ -220,7 +388,6 @@ const App = (() => {
         return;
       }
 
-      // หากกำลังเล่นอยู่ เช็กว่าเป็นตาของใคร
       if (timerIntervalId === null) startTimer();
 
       if (data.turn === mySymbol) {
@@ -230,12 +397,11 @@ const App = (() => {
       } else {
         currentState = State.ONLINE_OPPONENT_TURN;
         UI.setBoardInteractive(false);
-        UI.setStatus(`Waiting for friend (${data.turn})…`);
+        UI.setStatus(`Waiting for ${oppName} (${oppSymbol})…`);
       }
     });
   }
 
-  /** ออกจากห้องออนไลน์ กลับไปโหมดเล่นกับ AI */
   function leaveOnlineRoom() {
     if (roomListenerRef) {
       off(roomListenerRef);
@@ -244,76 +410,59 @@ const App = (() => {
     isOnline = false;
     currentRoomId = null;
     mySymbol = null;
-    updateLobbyUI(false, '');
-    UI.renderScoreboard(scores);
-    startRound();
-  }
+    window.history.replaceState({}, document.title, window.location.pathname);
 
-  /** ปรับหน้าตาปุ่มและข้อความหัวเว็บระหว่างโหมด AI กับโหมดเพื่อน */
-  function updateLobbyUI(online, infoText) {
-    const createBtn = document.getElementById('create-room-btn');
-    const joinBtn = document.getElementById('join-room-btn');
-    const codeInput = document.getElementById('room-code-input');
-    const leaveBtn = document.getElementById('leave-room-btn');
-    const roomInfo = document.getElementById('room-info');
-    const modeBadge = document.getElementById('mode-badge');
-    const oppLabel = document.getElementById('opponent-label');
-    const scoreLabelPlayer = document.getElementById('score-label-player');
-    const scoreLabelAi = document.getElementById('score-label-ai');
-
-    if (createBtn) createBtn.style.display = online ? 'none' : 'inline-block';
-    if (joinBtn) joinBtn.style.display = online ? 'none' : 'inline-block';
-    if (codeInput) codeInput.style.display = online ? 'none' : 'inline-block';
-    if (leaveBtn) leaveBtn.style.display = online ? 'inline-block' : 'none';
-    if (roomInfo) roomInfo.textContent = infoText;
-
-    if (online) {
-      if (modeBadge) modeBadge.textContent = `Online Room #${currentRoomId}`;
-      if (oppLabel) oppLabel.textContent = 'Friend is';
-      if (scoreLabelPlayer) scoreLabelPlayer.textContent = `You (${mySymbol})`;
-      if (scoreLabelAi) scoreLabelAi.textContent = `Friend (${mySymbol === 'X' ? 'O' : 'X'})`;
-    } else {
-      if (modeBadge) modeBadge.innerHTML = 'Minimax AI &middot; Unbeatable';
-      if (oppLabel) oppLabel.textContent = 'Computer is';
-      if (scoreLabelPlayer) scoreLabelPlayer.textContent = 'You (X)';
-      if (scoreLabelAi) scoreLabelAi.textContent = 'AI (O)';
+    // คืนค่า X / O ใน Subtitle
+    const markX = document.getElementById('mark-x');
+    const markO = document.getElementById('mark-o');
+    if (markX && markO) {
+      markX.textContent = SKINS[skinIndex].x;
+      markO.textContent = SKINS[skinIndex].o;
     }
   }
 
-  /** จัดการเมื่อคลิกช่องกระดาน (รองรับทั้งโหมด AI และโหมดออนไลน์) */
+  /** คลิกช่องกระดาน */
   async function handleCellClick(index) {
     if (board[index] !== null) return;
 
-    // --- กรณีเล่นออนไลน์กับเพื่อน ---
     if (isOnline) {
       if (currentState !== State.ONLINE_MY_TURN) return;
 
       const nextBoard = GameEngine.makeMove(board, index, mySymbol);
-      const nextTurn = mySymbol === 'X' ? 'O' : 'X';
+      const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
       const status = GameEngine.getGameStatus(nextBoard);
 
       const updates = {
         board: nextBoard.map(c => c === null ? "" : c),
-        turn: nextTurn
+        turn: oppSymbol
       };
 
-      // ถ้าตานี้จบเกม ให้อัปเดตคะแนนขึ้น Firebase ด้วย
       if (status.status !== 'in-progress') {
-        const snapshot = await get(ref(db, `rooms/${currentRoomId}/scores`));
-        const currentScores = snapshot.val() || { X: 0, O: 0, ties: 0 };
+        const snapshot = await get(ref(db, `rooms/${currentRoomId}`));
+        const roomData = snapshot.val() || {};
+        const currentScores = roomData.scores || { X: 0, O: 0, ties: 0 };
+        const currentStreaks = roomData.streaks || { X: 0, O: 0 };
+
         if (status.status === 'win') {
-          currentScores[status.winner] = (currentScores[status.winner] || 0) + 1;
+          const winner = status.winner;
+          const loser = winner === 'X' ? 'O' : 'X';
+          currentScores[winner] = (currentScores[winner] || 0) + 1;
+          currentStreaks[winner] = (currentStreaks[winner] || 0) + 1;
+          currentStreaks[loser] = 0; // คนแพ้รีเซ็ต Win Streak เป็น 0
         } else {
+          // เสมอ: คง Win Streak เดิมไว้ ไม่รีเซ็ต
           currentScores.ties = (currentScores.ties || 0) + 1;
         }
+
         updates.scores = currentScores;
+        updates.streaks = currentStreaks;
       }
 
       await update(ref(db, 'rooms/' + currentRoomId), updates);
       return;
     }
 
-    // --- กรณีเล่นกับ AI ตามปกติ ---
+    // โหมด AI
     if (currentState !== State.PLAYER_TURN) return;
 
     board = GameEngine.makeMove(board, index, HUMAN_PLAYER);
@@ -329,7 +478,6 @@ const App = (() => {
     takeAiTurn();
   }
 
-  /** จัดการปุ่ม Play Again / ปุ่ม R */
   async function handleRestartClick() {
     if (isOnline && currentRoomId) {
       const snapshot = await get(ref(db, 'rooms/' + currentRoomId));
@@ -337,7 +485,6 @@ const App = (() => {
       const data = snapshot.val();
       if (data.status === 'waiting') return;
 
-      // สลับคนเริ่มก่อนในรอบถัดไป
       const nextStarter = (data.round % 2 === 1) ? 'O' : 'X';
       await update(ref(db, 'rooms/' + currentRoomId), {
         board: Array(9).fill(""),
@@ -422,7 +569,7 @@ const App = (() => {
   }
 
   function handleFirstPlayerChange(player) {
-    if (isOnline) return; // ในโหมดออนไลน์จะสลับคนเริ่มอัตโนมัติทุกรอบ
+    if (isOnline) return;
     firstPlayer = player === 'ai' ? AI_PLAYER : HUMAN_PLAYER;
     UI.setFirstPlayerSelection(player);
     startRound();
@@ -432,6 +579,14 @@ const App = (() => {
     skinIndex = (skinIndex + 1) % SKINS.length;
     saveSkinIndex(skinIndex);
     UI.applySkin(SKINS[skinIndex]);
+    if (isOnline && mySymbol) {
+      const markX = document.getElementById('mark-x');
+      const markO = document.getElementById('mark-o');
+      if (markX && markO) {
+        markX.textContent = mySymbol === 'X' ? SKINS[skinIndex].x : SKINS[skinIndex].o;
+        markO.textContent = mySymbol === 'X' ? SKINS[skinIndex].o : SKINS[skinIndex].x;
+      }
+    }
     render();
   }
 
@@ -442,6 +597,8 @@ const App = (() => {
   }
 
   function handleKeyDown(event) {
+    const overlay = document.getElementById('home-overlay');
+    if (overlay && !overlay.classList.contains('hidden')) return;
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
 
     if (event.key >= '1' && event.key <= '9') {
@@ -486,11 +643,15 @@ const App = (() => {
     }
   }
 
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+
+  // --- LocalStorage Helpers ---
   function loadScores() {
     try {
       const raw = localStorage.getItem(SCORES_STORAGE_KEY);
       if (!raw) return { player: 0, ai: 0, ties: 0 };
-
       const parsed = JSON.parse(raw);
       return {
         player: Number.isFinite(parsed.player) ? parsed.player : 0,
@@ -503,9 +664,7 @@ const App = (() => {
   }
 
   function saveScores(currentScores) {
-    try {
-      localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(currentScores));
-    } catch (error) {}
+    try { localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(currentScores)); } catch (e) {}
   }
 
   function loadSkinIndex() {
@@ -518,9 +677,26 @@ const App = (() => {
   }
 
   function saveSkinIndex(index) {
+    try { localStorage.setItem(SKIN_STORAGE_KEY, String(index)); } catch (e) {}
+  }
+
+  function loadNickname() {
+    try { return localStorage.getItem(NICKNAME_STORAGE_KEY) || 'Player 1'; } catch (e) { return 'Player 1'; }
+  }
+
+  function saveNickname(name) {
+    try { localStorage.setItem(NICKNAME_STORAGE_KEY, name); } catch (e) {}
+  }
+
+  function loadBestStreak() {
     try {
-      localStorage.setItem(SKIN_STORAGE_KEY, String(index));
-    } catch (error) {}
+      const val = Number(localStorage.getItem(BEST_STREAK_STORAGE_KEY));
+      return Number.isFinite(val) && val > 0 ? val : 0;
+    } catch (e) { return 0; }
+  }
+
+  function saveBestStreak(val) {
+    try { localStorage.setItem(BEST_STREAK_STORAGE_KEY, String(val)); } catch (e) {}
   }
 
   function render() {

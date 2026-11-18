@@ -43,11 +43,12 @@ const App = (() => {
 
   let selectedGame = 'xo';         // 'xo' หรือ 'checkers'
   let xoVariant = 'classic';       // 'classic' หรือ 'vanishing'
+  let timeControl = 'none';        // 'none' | 'turn10' | 'turn15' | 'chess60'
 
   // สถานะเกม XO & Vanishing XO
   let board = GameEngine.createBoard();
-  let xQueue = []; // ลำดับช่องที่ X วาง (สำหรับหมากจางหาย สูงสุด 3 ตัว)
-  let oQueue = []; // ลำดับช่องที่ O วาง (สำหรับหมากจางหาย สูงสุด 3 ตัว)
+  let xQueue = [];
+  let oQueue = [];
   let currentState = State.PLAYER_TURN;
   let firstPlayer = HUMAN_PLAYER;
   let scores = loadScores();
@@ -61,7 +62,12 @@ const App = (() => {
   let chkForcedIdx = null;
   let chkScores = { player: 0, ai: 0, ties: 0 };
 
+  // ตัวแปรจับเวลา (Count-up / Turn Timer / Chess Clock)
   let elapsedSeconds = 0;
+  let turnRemaining = 15;
+  let chessTimeX = 60;
+  let chessTimeO = 60;
+  let activeClockSide = 'X';
   let timerIntervalId = null;
 
   let nickname = loadNickname();
@@ -112,6 +118,7 @@ const App = (() => {
     const copyLinkBtn = document.getElementById('copy-link-btn');
     const gameTabs = document.querySelectorAll('.game-tab');
     const variantPills = document.querySelectorAll('.variant-pill');
+    const timerPills = document.querySelectorAll('.timer-pill');
 
     gameTabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -127,6 +134,14 @@ const App = (() => {
         variantPills.forEach(p => p.classList.remove('active'));
         pill.classList.add('active');
         xoVariant = pill.dataset.variant;
+      });
+    });
+
+    timerPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        timerPills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        timeControl = pill.dataset.time;
       });
     });
 
@@ -237,14 +252,26 @@ const App = (() => {
     if (overlay) overlay.classList.add('hidden');
   }
 
-  function configureBoardView(gameType, variant = 'classic') {
+  function configureBoardView(gameType, variant = 'classic', tc = 'none') {
     selectedGame = gameType;
     xoVariant = variant;
+    timeControl = tc;
+
     const xoBoardEl = document.getElementById('board');
     const chkBoardEl = document.getElementById('checkers-board');
     const headerTitle = document.getElementById('header-game-title');
     const skinCtrl = document.getElementById('skin-picker-control');
     const kbdHint = document.getElementById('kbd-hint');
+
+    const singleTimerBox = document.getElementById('single-timer-box');
+    const chessClockBox = document.getElementById('chess-clock-box');
+    if (tc === 'chess60') {
+      if (singleTimerBox) singleTimerBox.style.display = 'none';
+      if (chessClockBox) chessClockBox.style.display = 'flex';
+    } else {
+      if (singleTimerBox) singleTimerBox.style.display = 'flex';
+      if (chessClockBox) chessClockBox.style.display = 'none';
+    }
 
     if (gameType === 'checkers') {
       if (xoBoardEl) xoBoardEl.style.display = 'none';
@@ -263,6 +290,13 @@ const App = (() => {
           : 'Tip: press <kbd>1</kbd>&ndash;<kbd>9</kbd> to play &middot; <kbd>R</kbd> to restart';
       }
     }
+  }
+
+  function getTimeLabel(tc) {
+    if (tc === 'turn10') return '⚡ 10s/Turn';
+    if (tc === 'turn15') return '⏳ 15s/Turn';
+    if (tc === 'chess60') return '♟️ 1m Chess';
+    return '';
   }
 
   async function submitLeaderboardScore(playerName, streakCount) {
@@ -321,7 +355,7 @@ const App = (() => {
     currentRoomId = null;
     mySymbol = 'X';
     resetRestartButtonUI();
-    configureBoardView(selectedGame, xoVariant);
+    configureBoardView(selectedGame, xoVariant, timeControl);
 
     const roomBar = document.getElementById('online-room-bar');
     const firstMoveCtrl = document.getElementById('first-player-control');
@@ -331,13 +365,14 @@ const App = (() => {
     const scoreLabelAi = document.getElementById('score-label-ai');
     const markX = document.getElementById('mark-x');
     const markO = document.getElementById('mark-o');
+    const timeTag = getTimeLabel(timeControl);
 
     if (roomBar) roomBar.style.display = 'none';
     if (oppRole) oppRole.textContent = 'Computer is';
 
     if (selectedGame === 'checkers') {
       if (firstMoveCtrl) firstMoveCtrl.style.display = 'none';
-      if (modeBadge) modeBadge.textContent = 'Checkers AI · Alpha-Beta';
+      if (modeBadge) modeBadge.textContent = `Checkers AI ${timeTag}`.trim();
       if (markX) markX.textContent = 'เบี้ยฟ้า';
       if (markO) markO.textContent = 'เบี้ยชมพู';
       if (scoreLabelPlayer) scoreLabelPlayer.textContent = `${nickname} (ฟ้า)`;
@@ -347,9 +382,8 @@ const App = (() => {
     } else {
       if (firstMoveCtrl) firstMoveCtrl.style.display = 'flex';
       if (modeBadge) {
-        modeBadge.innerHTML = xoVariant === 'vanishing'
-          ? '👻 Vanishing XO &middot; AI'
-          : 'Minimax AI &middot; Unbeatable';
+        const baseName = xoVariant === 'vanishing' ? '👻 Vanishing XO' : 'Minimax AI';
+        modeBadge.textContent = timeTag ? `${baseName} · ${timeTag}` : `${baseName} · Unbeatable`;
       }
       if (markX) markX.textContent = SKINS[skinIndex].x;
       if (markO) markO.textContent = SKINS[skinIndex].o;
@@ -369,7 +403,7 @@ const App = (() => {
     handledEndRound = 0;
     resetRestartButtonUI();
 
-    configureBoardView(selectedGame, xoVariant);
+    configureBoardView(selectedGame, xoVariant, timeControl);
 
     const initialBoard = selectedGame === 'checkers'
       ? CheckersEngine.createBoard().map(c => c === null ? "" : c)
@@ -378,6 +412,9 @@ const App = (() => {
     await set(ref(db, 'rooms/' + roomId), {
       game: selectedGame,
       variant: xoVariant,
+      timeControl: timeControl,
+      chessTime: { X: 60, O: 60 },
+      timeoutWinner: "",
       board: initialBoard,
       xQueue: [],
       oQueue: [],
@@ -418,7 +455,8 @@ const App = (() => {
 
     const roomGame = data.game || 'xo';
     const roomVariant = data.variant || 'classic';
-    configureBoardView(roomGame, roomVariant);
+    const roomTimeControl = data.timeControl || 'none';
+    configureBoardView(roomGame, roomVariant, roomTimeControl);
 
     currentRoomId = roomId;
     mySymbol = 'O';
@@ -438,7 +476,6 @@ const App = (() => {
     listenToRoom(roomId);
   }
 
-  /** ตั้งค่าแจ้งเตือนอัตโนมัติหากผู้เล่นปิดแท็บหรือหลุดการเชื่อมต่อ */
   function registerPresenceDisconnect(roomId, symbol) {
     const presRef = ref(db, `rooms/${roomId}/presence/${symbol}`);
     disconnectHandler = onDisconnect(presRef);
@@ -454,6 +491,7 @@ const App = (() => {
     const oppRole = document.getElementById('opponent-role-label');
     const markX = document.getElementById('mark-x');
     const markO = document.getElementById('mark-o');
+    const timeTag = getTimeLabel(timeControl);
 
     const sideText = selectedGame === 'checkers'
       ? (mySymbol === 'X' ? 'เบี้ยฟ้า' : 'เบี้ยชมพู')
@@ -464,9 +502,8 @@ const App = (() => {
     if (copyLinkBtn) copyLinkBtn.style.display = isHost ? 'inline-block' : 'none';
     if (firstMoveCtrl) firstMoveCtrl.style.display = 'none';
     if (modeBadge) {
-      modeBadge.textContent = xoVariant === 'vanishing' && selectedGame === 'xo'
-        ? `Online 👻 หมากจางหาย #${roomId}`
-        : `Online Room #${roomId}`;
+      const baseTitle = xoVariant === 'vanishing' && selectedGame === 'xo' ? '👻 หมากจางหาย' : `Room #${roomId}`;
+      modeBadge.textContent = timeTag ? `${baseTitle} · ${timeTag}` : `Online Room #${roomId}`;
     }
     if (oppRole) oppRole.textContent = 'Friend is';
 
@@ -491,6 +528,11 @@ const App = (() => {
 
       const gameType = data.game || 'xo';
       const variant = data.variant || 'classic';
+      const roomTc = data.timeControl || 'none';
+      if (timeControl !== roomTc) {
+        configureBoardView(gameType, variant, roomTc);
+      }
+
       const expectedLen = gameType === 'checkers' ? 64 : 9;
       const syncedBoard = (data.board || Array(expectedLen).fill("")).map(c => c === "" ? null : c);
 
@@ -498,9 +540,15 @@ const App = (() => {
         lastOnlineRound = data.round;
         handledEndRound = 0;
         chkSelectedIdx = null;
+        chessTimeX = 60;
+        chessTimeO = 60;
         resetRestartButtonUI();
         if (gameType === 'xo') UI.clearHighlights();
-        startTimer();
+      }
+
+      if (data.chessTime) {
+        chessTimeX = data.chessTime.X ?? 60;
+        chessTimeO = data.chessTime.O ?? 60;
       }
 
       const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
@@ -509,7 +557,6 @@ const App = (() => {
       const myStreak = (data.streaks && data.streaks[mySymbol]) || 0;
       const oppStreak = (data.streaks && data.streaks[oppSymbol]) || 0;
 
-      // ตรวจสอบสถานะการเชื่อมต่อของอีกฝั่ง (Presence)
       if (data.status === 'playing' && data.presence && data.presence[oppSymbol] === false) {
         currentState = State.GAME_OVER;
         UI.setBoardInteractive(false);
@@ -548,8 +595,37 @@ const App = (() => {
         });
       }
 
-      // อัปเดตสถานะปุ่มขอแก้มือ (Rematch Request)
       updateRematchButtonState(data.rematch, mySymbol, oppSymbol, oppName);
+
+      // ตรวจสอบการแพ้ฟาวล์เพราะหมดเวลา (Timeout Winner)
+      if (data.timeoutWinner) {
+        currentState = State.GAME_OVER;
+        UI.setBoardInteractive(false);
+        stopTimer();
+        clearVanishingPulse();
+
+        if (gameType === 'checkers') {
+          chkBoard = syncedBoard;
+          renderCheckersBoard();
+        } else {
+          board = syncedBoard;
+          render();
+        }
+
+        const rematchAlert = (data.rematch && data.rematch[oppSymbol]) ? ` · 🔥 ${oppName} ขอแก้มือ!` : '';
+        if (data.timeoutWinner === mySymbol) {
+          UI.setStatus(`⏰ อีกฝั่งหมดเวลา! ${myName} ชนะ! 🎉${rematchAlert}`);
+          if (handledEndRound !== data.round) {
+            Effects.playWin();
+            Effects.confettiBurst(getAccentRgb('--accent-x-rgb', '34, 224, 255'));
+          }
+        } else {
+          UI.setStatus(`⏰ คุณหมดเวลา! ${oppName} ชนะ!${rematchAlert}`);
+          if (handledEndRound !== data.round) Effects.playLose();
+        }
+        handledEndRound = data.round;
+        return;
+      }
 
       // --- แยกจัดการกระดาน Checkers vs XO ---
       if (gameType === 'checkers') {
@@ -587,21 +663,23 @@ const App = (() => {
           return;
         }
 
-        if (timerIntervalId === null) startTimer();
-
         if (chkTurn === mySymbol) {
+          const wasNotMyTurn = currentState !== State.ONLINE_MY_TURN;
           currentState = State.ONLINE_MY_TURN;
+          if (wasNotMyTurn) startTurnOrChessTimer(mySymbol);
           UI.setStatus(chkForcedIdx !== null ? 'กินต่อเนื่อง! เลือกช่องเดินต่อ' : `ตาของคุณ (${myTag})`);
         } else {
+          const wasMyTurn = currentState !== State.ONLINE_OPPONENT_TURN;
           currentState = State.ONLINE_OPPONENT_TURN;
           chkSelectedIdx = null;
           renderCheckersBoard();
+          if (wasMyTurn) startTurnOrChessTimer(oppSymbol);
           UI.setStatus(`รอ ${oppName} (${oppTag}) เดินหมาก…`);
         }
         return;
       }
 
-      // --- โหมด XO ออนไลน์ (รองรับทั้ง Classic & Vanishing) ---
+      // --- โหมด XO ออนไลน์ ---
       xQueue = Array.isArray(data.xQueue) ? data.xQueue : [];
       oQueue = Array.isArray(data.oQueue) ? data.oQueue : [];
 
@@ -652,15 +730,17 @@ const App = (() => {
         return;
       }
 
-      if (timerIntervalId === null) startTimer();
-
       if (data.turn === mySymbol) {
+        const wasNotMyTurn = currentState !== State.ONLINE_MY_TURN;
         currentState = State.ONLINE_MY_TURN;
         UI.setBoardInteractive(true);
+        if (wasNotMyTurn) startTurnOrChessTimer(mySymbol);
         UI.setStatus(`Your turn (${mySymbol})`);
       } else {
+        const wasMyTurn = currentState !== State.ONLINE_OPPONENT_TURN;
         currentState = State.ONLINE_OPPONENT_TURN;
         UI.setBoardInteractive(false);
+        if (wasMyTurn) startTurnOrChessTimer(oppSymbol);
         UI.setStatus(`Waiting for ${oppName} (${oppSymbol})…`);
       }
     });
@@ -712,15 +792,160 @@ const App = (() => {
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
+  // ==================== TIMER & CHESS CLOCK ENGINE ====================
+  function startTurnOrChessTimer(activeSide = 'X') {
+    stopTimer();
+    activeClockSide = activeSide;
+
+    if (timeControl === 'none') {
+      elapsedSeconds = 0;
+      updateTimerDisplay();
+      timerIntervalId = setInterval(() => {
+        elapsedSeconds += 1;
+        updateTimerDisplay();
+      }, 1000);
+      return;
+    }
+
+    if (timeControl === 'turn10' || timeControl === 'turn15') {
+      turnRemaining = timeControl === 'turn10' ? 10 : 15;
+      updateTimerDisplay();
+      timerIntervalId = setInterval(() => {
+        turnRemaining -= 1;
+        updateTimerDisplay();
+        if (turnRemaining <= 0) {
+          stopTimer();
+          handleTimeExpired(activeClockSide);
+        }
+      }, 1000);
+      return;
+    }
+
+    if (timeControl === 'chess60') {
+      updateTimerDisplay();
+      timerIntervalId = setInterval(() => {
+        if (activeClockSide === 'X') {
+          chessTimeX = Math.max(0, chessTimeX - 1);
+          updateTimerDisplay();
+          if (chessTimeX <= 0) {
+            stopTimer();
+            handleTimeExpired('X');
+          }
+        } else {
+          chessTimeO = Math.max(0, chessTimeO - 1);
+          updateTimerDisplay();
+          if (chessTimeO <= 0) {
+            stopTimer();
+            handleTimeExpired('O');
+          }
+        }
+      }, 1000);
+    }
+  }
+
+  function updateTimerDisplay() {
+    const singleBox = document.getElementById('single-timer-box');
+    const clockXEl = document.getElementById('clock-x');
+    const clockOEl = document.getElementById('clock-o');
+
+    if (timeControl === 'none') {
+      if (singleBox) singleBox.classList.remove('timer-danger');
+      UI.setTimer(formatElapsed(elapsedSeconds));
+    } else if (timeControl === 'turn10' || timeControl === 'turn15') {
+      UI.setTimer(formatElapsed(turnRemaining));
+      if (singleBox) {
+        if (turnRemaining <= 5 && turnRemaining > 0) singleBox.classList.add('timer-danger');
+        else singleBox.classList.remove('timer-danger');
+      }
+    } else if (timeControl === 'chess60') {
+      if (clockXEl) {
+        clockXEl.textContent = `🔵 ${formatElapsed(chessTimeX)}`;
+        clockXEl.classList.toggle('active-clock', activeClockSide === 'X');
+        clockXEl.classList.toggle('timer-danger', activeClockSide === 'X' && chessTimeX <= 5 && chessTimeX > 0);
+      }
+      if (clockOEl) {
+        clockOEl.textContent = `🔴 ${formatElapsed(chessTimeO)}`;
+        clockOEl.classList.toggle('active-clock', activeClockSide === 'O');
+        clockOEl.classList.toggle('timer-danger', activeClockSide === 'O' && chessTimeO <= 5 && chessTimeO > 0);
+      }
+    }
+  }
+
+  async function handleTimeExpired(loserSide) {
+    if (currentState === State.GAME_OVER) return;
+    const winnerSide = loserSide === 'X' ? 'O' : 'X';
+
+    if (isOnline && currentRoomId) {
+      // ให้ฝั่งที่หมดเวลาเป็นคนส่งผลการแพ้ฟาวล์ขึ้น Firebase เพื่อป้องกันการอัปเดตซ้ำซ้อน
+      if (loserSide === mySymbol) {
+        const snapshot = await get(ref(db, `rooms/${currentRoomId}`));
+        const roomData = snapshot.val() || {};
+        if (roomData.timeoutWinner) return;
+
+        const currentScores = roomData.scores || { X: 0, O: 0, ties: 0 };
+        const currentStreaks = roomData.streaks || { X: 0, O: 0 };
+        currentScores[winnerSide] = (currentScores[winnerSide] || 0) + 1;
+        currentStreaks[winnerSide] = (currentStreaks[winnerSide] || 0) + 1;
+        currentStreaks[loserSide] = 0;
+
+        await update(ref(db, 'rooms/' + currentRoomId), {
+          timeoutWinner: winnerSide,
+          scores: currentScores,
+          streaks: currentStreaks
+        });
+      }
+      return;
+    }
+
+    // โหมดเล่นกับ AI
+    currentState = State.GAME_OVER;
+    UI.setBoardInteractive(false);
+    clearVanishingPulse();
+
+    if (selectedGame === 'checkers') {
+      if (winnerSide === 'X') {
+        chkScores.player += 1;
+        UI.setStatus('⏰ AI หมดเวลา! คุณชนะ! 🎉');
+        Effects.playWin();
+      } else {
+        chkScores.ai += 1;
+        UI.setStatus('⏰ คุณหมดเวลา! AI ชนะ!');
+        Effects.playLose();
+      }
+      UI.renderScoreboard(chkScores);
+    } else {
+      if (winnerSide === 'X') {
+        scores.player += 1;
+        UI.setStatus('⏰ AI หมดเวลา! คุณชนะ! 🎉');
+        Effects.playWin();
+      } else {
+        scores.ai += 1;
+        UI.setStatus('⏰ คุณหมดเวลา! AI ชนะ!');
+        Effects.playLose();
+      }
+      saveScores(scores);
+      UI.renderScoreboard(scores);
+    }
+  }
+
+  function stopTimer() {
+    if (timerIntervalId !== null) {
+      clearInterval(timerIntervalId);
+      timerIntervalId = null;
+    }
+  }
+
   // ==================== CHECKERS LOGIC & RENDER ====================
   function startCheckersRound() {
     chkBoard = CheckersEngine.createBoard();
     chkTurn = 'X';
     chkSelectedIdx = null;
     chkForcedIdx = null;
+    chessTimeX = 60;
+    chessTimeO = 60;
     currentState = State.PLAYER_TURN;
     renderCheckersBoard();
-    startTimer();
+    startTurnOrChessTimer('X');
     UI.setStatus('ตาของคุณ (เบี้ยสีฟ้า)');
   }
 
@@ -794,7 +1019,8 @@ const App = (() => {
       const updates = {
         board: chkBoard.map(c => c === null ? "" : c),
         turn: nextTurn,
-        forcedIdx: nextForced
+        forcedIdx: nextForced,
+        chessTime: { X: chessTimeX, O: chessTimeO }
       };
 
       const status = CheckersEngine.getGameStatus(chkBoard, nextTurn);
@@ -841,11 +1067,12 @@ const App = (() => {
 
   function takeCheckersAiTurn() {
     currentState = State.AI_TURN;
+    startTurnOrChessTimer('O');
     UI.setStatus('AI กำลังคิด…');
 
     const stepAi = (forcedIdx = null) => {
       setTimeout(() => {
-        if (isOnline || selectedGame !== 'checkers') return;
+        if (isOnline || selectedGame !== 'checkers' || currentState === State.GAME_OVER) return;
         const aiMove = CheckersAI.getBestMove(chkBoard, 'O', forcedIdx);
         if (!aiMove) {
           endCheckersAiGame('X');
@@ -868,6 +1095,7 @@ const App = (() => {
         }
 
         currentState = State.PLAYER_TURN;
+        startTurnOrChessTimer('X');
         UI.setStatus('ตาของคุณ (เบี้ยสีฟ้า)');
       }, AI_THINK_DELAY_MS);
     };
@@ -892,7 +1120,6 @@ const App = (() => {
   }
 
   // ==================== TIC-TAC-TOE & VANISHING LOGIC ====================
-  /** คำนวณการวางหมากสำหรับโหมด Classic และ Vanishing XO */
   function applyXoMoveWithVariant(curBoard, index, player, curXQueue, curOQueue) {
     const nextBoard = [...curBoard];
     const nextX = [...curXQueue];
@@ -911,7 +1138,6 @@ const App = (() => {
     return { board: nextBoard, xQueue: nextX, oQueue: nextO };
   }
 
-  /** บอท AI สำหรับโหมด Vanishing XO (จำลองลำดับหมากหายล่วงหน้า) */
   function getBestVanishingMove(curBoard, aiSym, humanSym, curXQueue, curOQueue) {
     const available = [];
     for (let i = 0; i < 9; i++) {
@@ -919,19 +1145,16 @@ const App = (() => {
     }
     if (available.length === 0) return -1;
 
-    // 1. หาตาเดินที่ชนะทันที
     for (const idx of available) {
       const sim = applyXoMoveWithVariant(curBoard, idx, aiSym, curXQueue, curOQueue);
       if (GameEngine.getGameStatus(sim.board).winner === aiSym) return idx;
     }
 
-    // 2. หาตาเดินที่บล็อกไม่ให้ผู้เล่นชนะในตาถัดไป
     for (const idx of available) {
       const simHuman = applyXoMoveWithVariant(curBoard, idx, humanSym, curXQueue, curOQueue);
       if (GameEngine.getGameStatus(simHuman.board).winner === humanSym) return idx;
     }
 
-    // 3. ยึดช่องกลางหรือมุมกระดาน
     if (available.includes(4)) return 4;
     const corners = [0, 2, 6, 8].filter(c => available.includes(c));
     if (corners.length > 0) return corners[Math.floor(Math.random() * corners.length)];
@@ -953,7 +1176,8 @@ const App = (() => {
         board: applied.board.map(c => c === null ? "" : c),
         xQueue: applied.xQueue,
         oQueue: applied.oQueue,
-        turn: oppSymbol
+        turn: oppSymbol,
+        chessTime: { X: chessTimeX, O: chessTimeO }
       };
 
       if (status.status !== 'in-progress') {
@@ -999,7 +1223,6 @@ const App = (() => {
     takeAiTurn();
   }
 
-  /** ระบบกด Play Again / ขอแก้มือ (Rematch Request) ในห้องออนไลน์ */
   async function handleRestartClick() {
     if (isOnline && currentRoomId) {
       const roomRef = ref(db, 'rooms/' + currentRoomId);
@@ -1011,7 +1234,6 @@ const App = (() => {
       const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
       const rematch = data.rematch || { X: false, O: false };
 
-      // หากอีกฝั่งกดขอแก้มือไว้แล้ว หรือเกมยังไม่จบ -> เริ่มรอบใหม่ทันที
       if (rematch[oppSymbol] || currentState !== State.GAME_OVER) {
         const nextStarter = (data.round % 2 === 1) ? 'O' : 'X';
         const resetBoard = (data.game === 'checkers')
@@ -1024,11 +1246,12 @@ const App = (() => {
           oQueue: [],
           turn: nextStarter,
           forcedIdx: -1,
+          chessTime: { X: 60, O: 60 },
+          timeoutWinner: "",
           rematch: { X: false, O: false },
           round: (data.round || 1) + 1
         });
       } else {
-        // ส่งคำขอแก้มือให้อีกฝั่งทราบ
         await update(roomRef, {
           [`rematch/${mySymbol}`]: true
         });
@@ -1046,12 +1269,13 @@ const App = (() => {
   function takeAiTurn() {
     currentState = State.AI_TURN;
     UI.setBoardInteractive(false);
+    startTurnOrChessTimer(AI_PLAYER);
     UI.setStatus('Computer is thinking…');
 
     const thisRound = roundId;
 
     setTimeout(() => {
-      if (thisRound !== roundId || isOnline) return;
+      if (thisRound !== roundId || isOnline || currentState === State.GAME_OVER) return;
 
       const move = xoVariant === 'vanishing'
         ? getBestVanishingMove(board, AI_PLAYER, HUMAN_PLAYER, xQueue, oQueue)
@@ -1073,6 +1297,7 @@ const App = (() => {
 
       currentState = State.PLAYER_TURN;
       UI.setBoardInteractive(true);
+      startTurnOrChessTimer(HUMAN_PLAYER);
       UI.setStatus('Your turn (X)');
     }, AI_THINK_DELAY_MS);
   }
@@ -1111,16 +1336,18 @@ const App = (() => {
     board = GameEngine.createBoard();
     xQueue = [];
     oQueue = [];
+    chessTimeX = 60;
+    chessTimeO = 60;
     roundId += 1;
     UI.clearHighlights();
     render();
-    startTimer();
 
     if (firstPlayer === AI_PLAYER) {
       takeAiTurn();
     } else {
       currentState = State.PLAYER_TURN;
       UI.setBoardInteractive(true);
+      startTurnOrChessTimer(HUMAN_PLAYER);
       UI.setStatus('Your turn (X)');
     }
   }
@@ -1170,26 +1397,10 @@ const App = (() => {
   }
 
   function formatElapsed(totalSeconds) {
-    const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-    const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+    const safeSec = Math.max(0, totalSeconds);
+    const minutes = Math.floor(safeSec / 60).toString().padStart(2, '0');
+    const seconds = (safeSec % 60).toString().padStart(2, '0');
     return `${minutes}:${seconds}`;
-  }
-
-  function startTimer() {
-    stopTimer();
-    elapsedSeconds = 0;
-    UI.setTimer(formatElapsed(elapsedSeconds));
-    timerIntervalId = setInterval(() => {
-      elapsedSeconds += 1;
-      UI.setTimer(formatElapsed(elapsedSeconds));
-    }, 1000);
-  }
-
-  function stopTimer() {
-    if (timerIntervalId !== null) {
-      clearInterval(timerIntervalId);
-      timerIntervalId = null;
-    }
   }
 
   function getAccentRgb(cssVariableName, fallback) {
@@ -1264,7 +1475,6 @@ const App = (() => {
     UI.renderBoard(board);
     clearVanishingPulse();
 
-    // ในโหมดหมากจางหาย ให้กระพริบตัวหมากตัวที่เก่าที่สุดที่จะหายไปในตาถัดไป
     if (xoVariant === 'vanishing' && currentState !== State.GAME_OVER) {
       const cells = document.querySelectorAll('#board .cell');
       if (xQueue.length === 3 && cells[xQueue[0]]) {

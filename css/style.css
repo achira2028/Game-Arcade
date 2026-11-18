@@ -1,4 +1,4 @@
-/* style.css - Complete HUD, Board, Home Overlay & Leaderboard */
+/* style.css - Complete HUD, XO Board, Checkers Board & Game Hub */
 
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
 
@@ -255,6 +255,7 @@ body {
   50% { opacity: 0.45; transform: scale(0.72); }
 }
 
+/* Tic-Tac-Toe 3x3 Board */
 .board {
   position: relative;
   display: grid;
@@ -346,6 +347,90 @@ body {
 @keyframes win-glow {
   0%, 100% { box-shadow: inset 0 0 0 3px rgba(53, 208, 127, 0.35); }
   50% { box-shadow: inset 0 0 0 3px rgba(53, 208, 127, 0.65); }
+}
+
+/* ================= CHECKERS 8x8 BOARD ================= */
+.checkers-board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  width: 62vmin;
+  height: 62vmin;
+  max-width: 560px;
+  max-height: 560px;
+  background: var(--board-bg);
+  border: 4px solid var(--grid-line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.chk-cell {
+  position: relative;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+.chk-cell.light {
+  background: #233342;
+}
+
+.chk-cell.dark {
+  background: #131e28;
+}
+
+.chk-cell.valid-target {
+  cursor: pointer;
+}
+
+.chk-cell.valid-target::after {
+  content: '';
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: var(--win);
+  box-shadow: 0 0 12px var(--win);
+  animation: status-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.chk-piece {
+  width: 74%;
+  height: 74%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.8rem, 2.4vmin, 1.2rem);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  cursor: pointer;
+}
+
+.chk-piece.player-x {
+  background: radial-gradient(circle at 35% 35%, #7de9ff, var(--accent-x));
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 4px 12px rgba(var(--accent-x-rgb), 0.5);
+  color: #06222b;
+}
+
+.chk-piece.player-o {
+  background: radial-gradient(circle at 35% 35%, #ff9ab0, var(--accent-o));
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 4px 12px rgba(var(--accent-o-rgb), 0.5);
+  color: #2b0610;
+}
+
+.chk-piece.selected {
+  transform: scale(1.16);
+  box-shadow: 0 0 0 3px var(--thinking), 0 0 20px var(--thinking);
+}
+
+.chk-piece.king::before {
+  content: '👑';
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
 
 .kbd-hint {
@@ -440,11 +525,6 @@ body {
   color: var(--accent-o);
 }
 
-.toggle-btn:focus-visible {
-  outline: 2px solid var(--accent-x);
-  outline-offset: 2px;
-}
-
 .skin-picker {
   display: flex;
   align-items: center;
@@ -468,15 +548,6 @@ body {
 .skin-btn:hover {
   background: rgba(255, 255, 255, 0.09);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 16px rgba(var(--accent-x-rgb), 0.18);
-}
-
-.skin-btn:active {
-  transform: scale(0.96);
-}
-
-.skin-btn:focus-visible {
-  outline: 2px solid var(--accent-x);
-  outline-offset: 2px;
 }
 
 .difficulty {
@@ -519,33 +590,24 @@ body {
   filter: brightness(1.08);
 }
 
-.restart-btn:active {
-  transform: translateY(0);
-}
-
-.restart-btn:focus-visible {
-  outline: 2px solid var(--accent-x);
-  outline-offset: 3px;
-}
-
-/* State-aware turn indicator */
-.app:has(.cell:disabled):has(.cell:not(.taken)):not(:has(.cell.winning)) #status {
+/* State-aware turn indicator (XO only) */
+.app:has(#board .cell:disabled):has(#board .cell:not(.taken)):not(:has(#board .cell.winning)) #status {
   background: var(--thinking-soft);
   color: var(--thinking);
 }
 
-.app:not(:has(.cell.winning)):not(:has(.cell:not(.taken))) #status {
+.app:not(:has(#board .cell.winning)):not(:has(#board .cell:not(.taken))) #status {
   background: var(--tie-soft);
   color: var(--tie);
 }
 
-.app:has(.cell.winning) #status {
+.app:has(#board .cell.winning) #status {
   background: var(--win-soft);
   color: var(--win);
   transform: scale(1.04);
 }
 
-/* ================= HOME OVERLAY & LEADERBOARD ================= */
+/* ================= HOME OVERLAY & GAME SELECTOR ================= */
 .home-overlay {
   position: fixed;
   inset: 0;
@@ -570,10 +632,10 @@ body {
 
 .home-card {
   width: 100%;
-  max-width: 400px;
-  padding: 26px 24px;
+  max-width: 410px;
+  padding: 24px 22px;
   border-radius: var(--radius-lg);
-  background: rgba(28, 43, 56, 0.85);
+  background: rgba(28, 43, 56, 0.88);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -584,7 +646,7 @@ body {
 
 .home-logo {
   font-family: var(--font-display);
-  font-size: 2.1rem;
+  font-size: 2rem;
   font-weight: 800;
   letter-spacing: 6px;
   margin-bottom: 2px;
@@ -603,21 +665,56 @@ body {
 .home-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.65rem;
+  font-size: 1.55rem;
   font-weight: 800;
   letter-spacing: 1px;
   color: var(--text);
 }
 
 .home-subtitle {
-  margin: 4px 0 16px;
-  font-size: 0.82rem;
+  margin: 2px 0 14px;
+  font-size: 0.8rem;
   color: var(--muted);
+}
+
+/* แถบสลับเกมบนหน้าแรก */
+.game-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  background: rgba(16, 25, 34, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.game-tab {
+  border: none;
+  padding: 9px 10px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.game-tab:hover {
+  color: var(--text);
+}
+
+.game-tab.active {
+  background: linear-gradient(135deg, rgba(var(--accent-x-rgb), 0.22), rgba(var(--accent-o-rgb), 0.22));
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 .home-field {
   text-align: left;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .home-label {
@@ -639,10 +736,6 @@ body {
   font-size: 0.92rem;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.home-input::placeholder {
-  color: var(--muted);
 }
 
 .home-input:focus {
@@ -677,7 +770,7 @@ body {
   font-weight: 700;
   cursor: pointer;
   border: none;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease, background-color 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .home-btn:active {
@@ -705,7 +798,6 @@ body {
 .home-btn-outline:hover {
   background: rgba(var(--accent-o-rgb), 0.2);
   border-color: var(--accent-o);
-  box-shadow: 0 6px 22px rgba(var(--accent-o-rgb), 0.3);
 }
 
 .home-join-group {
@@ -740,25 +832,23 @@ body {
 
 .home-btn-secondary:hover {
   background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.3);
 }
 
-/* Global Win Streak Leaderboard */
+/* Global Leaderboard */
 .leaderboard-box {
-  margin-top: 16px;
-  padding-top: 14px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   text-align: left;
 }
 
 .leaderboard-title {
   font-family: var(--font-display);
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: var(--slate);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   text-align: center;
-  letter-spacing: 0.02em;
 }
 
 .leaderboard-list {
@@ -767,8 +857,8 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 155px;
+  gap: 5px;
+  max-height: 135px;
   overflow-y: auto;
 }
 
@@ -776,11 +866,11 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 12px;
+  padding: 5px 12px;
   border-radius: 10px;
   background: rgba(22, 34, 45, 0.65);
   border: 1px solid rgba(255, 255, 255, 0.04);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 .leaderboard-name {
@@ -806,12 +896,12 @@ body {
 
 .leaderboard-empty {
   text-align: center;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--muted);
-  padding: 6px 0;
+  padding: 4px 0;
 }
 
-/* Online Room Bar & Live Streak Pill */
+/* Online Room Bar & Streak Pill */
 .online-room-bar {
   display: flex;
   align-items: center;
@@ -840,11 +930,6 @@ body {
   font-size: 0.76rem;
   font-weight: 700;
   cursor: pointer;
-  transition: filter 0.15s ease;
-}
-
-.copy-link-btn:hover {
-  filter: brightness(1.1);
 }
 
 .streak-pill {
@@ -872,21 +957,8 @@ body {
 }
 
 @media (max-height: 480px) {
-  .board {
+  .board, .checkers-board {
     width: 46vmin;
     height: 46vmin;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cell,
-  .cell.taken,
-  .cell.winning,
-  .restart-btn,
-  .status,
-  .status::before,
-  .home-overlay {
-    animation: none !important;
-    transition: none !important;
   }
 }

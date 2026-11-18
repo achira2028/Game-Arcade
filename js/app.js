@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, update, off } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, set, get, onValue, update, off, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB9NErfSi6GW9hKPTh2kU24UtNx-od727s",
@@ -41,18 +41,20 @@ const App = (() => {
     GAME_OVER: 'GAME_OVER'
   };
 
-  // เกมที่เลือก ('xo' หรือ 'checkers')
-  let selectedGame = 'xo';
+  let selectedGame = 'xo';         // 'xo' หรือ 'checkers'
+  let xoVariant = 'classic';       // 'classic' หรือ 'vanishing'
 
-  // สถานะเกม XO
+  // สถานะเกม XO & Vanishing XO
   let board = GameEngine.createBoard();
+  let xQueue = []; // ลำดับช่องที่ X วาง (สำหรับหมากจางหาย สูงสุด 3 ตัว)
+  let oQueue = []; // ลำดับช่องที่ O วาง (สำหรับหมากจางหาย สูงสุด 3 ตัว)
   let currentState = State.PLAYER_TURN;
   let firstPlayer = HUMAN_PLAYER;
   let scores = loadScores();
   let skinIndex = loadSkinIndex();
   let roundId = 0;
 
-  // สถานะเกมหมากฮอส (Checkers)
+  // สถานะเกมหมากฮอส
   let chkBoard = CheckersEngine.createBoard();
   let chkTurn = 'X';
   let chkSelectedIdx = null;
@@ -65,11 +67,12 @@ const App = (() => {
   let nickname = loadNickname();
   let bestStreak = loadBestStreak();
 
-  // ออนไลน์
+  // ออนไลน์ & Rematch
   let isOnline = false;
   let currentRoomId = null;
   let mySymbol = null;
   let roomListenerRef = null;
+  let disconnectHandler = null;
   let lastOnlineRound = 0;
   let handledEndRound = 0;
 
@@ -108,14 +111,22 @@ const App = (() => {
     const homeNavBtn = document.getElementById('home-nav-btn');
     const copyLinkBtn = document.getElementById('copy-link-btn');
     const gameTabs = document.querySelectorAll('.game-tab');
+    const variantPills = document.querySelectorAll('.variant-pill');
 
-    // แท็บเลือกเกมบนหน้าแรก
     gameTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         gameTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         selectedGame = tab.dataset.game;
         updateHomeCardHeader();
+      });
+    });
+
+    variantPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        variantPills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        xoVariant = pill.dataset.variant;
       });
     });
 
@@ -160,6 +171,7 @@ const App = (() => {
       homeNavBtn.addEventListener('click', () => {
         if (isOnline) leaveOnlineRoom();
         stopTimer();
+        resetRestartButtonUI();
         showHomeOverlay();
       });
     }
@@ -180,12 +192,16 @@ const App = (() => {
   function updateHomeCardHeader() {
     const logo = document.getElementById('home-logo-icon');
     const title = document.getElementById('home-game-title');
+    const variantBox = document.getElementById('xo-variant-selector');
+
     if (selectedGame === 'checkers') {
       if (logo) logo.innerHTML = '<span class="logo-x">●</span><span class="logo-o">●</span>';
       if (title) title.textContent = 'หมากฮอสไทย';
+      if (variantBox) variantBox.style.display = 'none';
     } else {
       if (logo) logo.innerHTML = '<span class="logo-x">✕</span><span class="logo-o">○</span>';
       if (title) title.textContent = 'TIC-TAC-TOE';
+      if (variantBox) variantBox.style.display = 'grid';
     }
   }
 
@@ -221,9 +237,9 @@ const App = (() => {
     if (overlay) overlay.classList.add('hidden');
   }
 
-  /** สลับการแสดงผลกระดาน XO vs หมากฮอส */
-  function configureBoardView(gameType) {
+  function configureBoardView(gameType, variant = 'classic') {
     selectedGame = gameType;
+    xoVariant = variant;
     const xoBoardEl = document.getElementById('board');
     const chkBoardEl = document.getElementById('checkers-board');
     const headerTitle = document.getElementById('header-game-title');
@@ -239,9 +255,13 @@ const App = (() => {
     } else {
       if (xoBoardEl) xoBoardEl.style.display = 'grid';
       if (chkBoardEl) chkBoardEl.style.display = 'none';
-      if (headerTitle) headerTitle.textContent = 'Tic-Tac-Toe';
+      if (headerTitle) headerTitle.textContent = variant === 'vanishing' ? 'XO หมากจางหาย 👻' : 'Tic-Tac-Toe';
       if (skinCtrl) skinCtrl.style.display = 'flex';
-      if (kbdHint) kbdHint.innerHTML = 'Tip: press <kbd>1</kbd>&ndash;<kbd>9</kbd> to play &middot; <kbd>R</kbd> to restart';
+      if (kbdHint) {
+        kbdHint.innerHTML = variant === 'vanishing'
+          ? 'วางได้ฝั่งละ 3 ตัว ตัวที่กระพริบจะหายไปเมื่อวางตัวที่ 4!'
+          : 'Tip: press <kbd>1</kbd>&ndash;<kbd>9</kbd> to play &middot; <kbd>R</kbd> to restart';
+      }
     }
   }
 
@@ -296,12 +316,12 @@ const App = (() => {
     }
   }
 
-  /** เข้าสู่โหมดเล่นกับ AI (ทั้ง XO และ หมากฮอส) */
   function switchToAiMode() {
     isOnline = false;
     currentRoomId = null;
     mySymbol = 'X';
-    configureBoardView(selectedGame);
+    resetRestartButtonUI();
+    configureBoardView(selectedGame, xoVariant);
 
     const roomBar = document.getElementById('online-room-bar');
     const firstMoveCtrl = document.getElementById('first-player-control');
@@ -326,7 +346,11 @@ const App = (() => {
       startCheckersRound();
     } else {
       if (firstMoveCtrl) firstMoveCtrl.style.display = 'flex';
-      if (modeBadge) modeBadge.innerHTML = 'Minimax AI &middot; Unbeatable';
+      if (modeBadge) {
+        modeBadge.innerHTML = xoVariant === 'vanishing'
+          ? '👻 Vanishing XO &middot; AI'
+          : 'Minimax AI &middot; Unbeatable';
+      }
       if (markX) markX.textContent = SKINS[skinIndex].x;
       if (markO) markO.textContent = SKINS[skinIndex].o;
       if (scoreLabelPlayer) scoreLabelPlayer.textContent = `${nickname} (X)`;
@@ -336,7 +360,6 @@ const App = (() => {
     }
   }
 
-  /** สร้างห้องเล่นออนไลน์ (รองรับทั้ง XO และ หมากฮอส) */
   async function createOnlineRoom() {
     const roomId = Math.floor(1000 + Math.random() * 9000).toString();
     currentRoomId = roomId;
@@ -344,8 +367,9 @@ const App = (() => {
     isOnline = true;
     lastOnlineRound = 1;
     handledEndRound = 0;
+    resetRestartButtonUI();
 
-    configureBoardView(selectedGame);
+    configureBoardView(selectedGame, xoVariant);
 
     const initialBoard = selectedGame === 'checkers'
       ? CheckersEngine.createBoard().map(c => c === null ? "" : c)
@@ -353,21 +377,26 @@ const App = (() => {
 
     await set(ref(db, 'rooms/' + roomId), {
       game: selectedGame,
+      variant: xoVariant,
       board: initialBoard,
+      xQueue: [],
+      oQueue: [],
       turn: 'X',
       forcedIdx: -1,
       status: 'waiting',
       round: 1,
       players: { X: nickname, O: 'Friend' },
+      presence: { X: true, O: false },
+      rematch: { X: false, O: false },
       scores: { X: 0, O: 0, ties: 0 },
       streaks: { X: 0, O: 0 }
     });
 
+    registerPresenceDisconnect(roomId, 'X');
     setupOnlineModeUI(roomId, true);
     listenToRoom(roomId);
   }
 
-  /** เข้าร่วมห้องเล่นออนไลน์ */
   async function joinOnlineRoom(roomId) {
     const roomRef = ref(db, 'rooms/' + roomId);
     const snapshot = await get(roomRef);
@@ -388,21 +417,32 @@ const App = (() => {
     }
 
     const roomGame = data.game || 'xo';
-    configureBoardView(roomGame);
+    const roomVariant = data.variant || 'classic';
+    configureBoardView(roomGame, roomVariant);
 
     currentRoomId = roomId;
     mySymbol = 'O';
     isOnline = true;
     lastOnlineRound = data.round || 1;
     handledEndRound = 0;
+    resetRestartButtonUI();
 
     await update(roomRef, {
       status: 'playing',
-      'players/O': nickname
+      'players/O': nickname,
+      'presence/O': true
     });
 
+    registerPresenceDisconnect(roomId, 'O');
     setupOnlineModeUI(roomId, false);
     listenToRoom(roomId);
+  }
+
+  /** ตั้งค่าแจ้งเตือนอัตโนมัติหากผู้เล่นปิดแท็บหรือหลุดการเชื่อมต่อ */
+  function registerPresenceDisconnect(roomId, symbol) {
+    const presRef = ref(db, `rooms/${roomId}/presence/${symbol}`);
+    disconnectHandler = onDisconnect(presRef);
+    disconnectHandler.set(false);
   }
 
   function setupOnlineModeUI(roomId, isHost) {
@@ -423,7 +463,11 @@ const App = (() => {
     if (roomInfoText) roomInfoText.textContent = `Room #${roomId} (คุณคือ ${sideText})`;
     if (copyLinkBtn) copyLinkBtn.style.display = isHost ? 'inline-block' : 'none';
     if (firstMoveCtrl) firstMoveCtrl.style.display = 'none';
-    if (modeBadge) modeBadge.textContent = `Online Room #${roomId}`;
+    if (modeBadge) {
+      modeBadge.textContent = xoVariant === 'vanishing' && selectedGame === 'xo'
+        ? `Online 👻 หมากจางหาย #${roomId}`
+        : `Online Room #${roomId}`;
+    }
     if (oppRole) oppRole.textContent = 'Friend is';
 
     if (markX && markO) {
@@ -446,6 +490,7 @@ const App = (() => {
       if (!data) return;
 
       const gameType = data.game || 'xo';
+      const variant = data.variant || 'classic';
       const expectedLen = gameType === 'checkers' ? 64 : 9;
       const syncedBoard = (data.board || Array(expectedLen).fill("")).map(c => c === "" ? null : c);
 
@@ -453,6 +498,7 @@ const App = (() => {
         lastOnlineRound = data.round;
         handledEndRound = 0;
         chkSelectedIdx = null;
+        resetRestartButtonUI();
         if (gameType === 'xo') UI.clearHighlights();
         startTimer();
       }
@@ -462,6 +508,15 @@ const App = (() => {
       const oppName = (data.players && data.players[oppSymbol]) || 'Friend';
       const myStreak = (data.streaks && data.streaks[mySymbol]) || 0;
       const oppStreak = (data.streaks && data.streaks[oppSymbol]) || 0;
+
+      // ตรวจสอบสถานะการเชื่อมต่อของอีกฝั่ง (Presence)
+      if (data.status === 'playing' && data.presence && data.presence[oppSymbol] === false) {
+        currentState = State.GAME_OVER;
+        UI.setBoardInteractive(false);
+        stopTimer();
+        UI.setStatus(`⚠️ ${oppName} ออกจากห้องแล้ว (กด 🏠 เพื่อกลับหน้าแรก)`);
+        return;
+      }
 
       if (myStreak > bestStreak) {
         bestStreak = myStreak;
@@ -493,7 +548,10 @@ const App = (() => {
         });
       }
 
-      // แยกจัดการกระดาน Checkers vs XO
+      // อัปเดตสถานะปุ่มขอแก้มือ (Rematch Request)
+      updateRematchButtonState(data.rematch, mySymbol, oppSymbol, oppName);
+
+      // --- แยกจัดการกระดาน Checkers vs XO ---
       if (gameType === 'checkers') {
         chkBoard = syncedBoard;
         chkTurn = data.turn || 'X';
@@ -514,14 +572,15 @@ const App = (() => {
         if (status.status !== 'in-progress') {
           currentState = State.GAME_OVER;
           stopTimer();
+          const rematchAlert = (data.rematch && data.rematch[oppSymbol]) ? ` · 🔥 ${oppName} ขอแก้มือ!` : '';
           if (status.winner === mySymbol) {
-            UI.setStatus(`${myName} ชนะ! 🎉`);
+            UI.setStatus(`${myName} ชนะ! 🎉${rematchAlert}`);
             if (handledEndRound !== data.round) {
               Effects.playWin();
               Effects.confettiBurst(getAccentRgb('--accent-x-rgb', '34, 224, 255'));
             }
           } else {
-            UI.setStatus(`${oppName} ชนะ!`);
+            UI.setStatus(`${oppName} ชนะ!${rematchAlert}`);
             if (handledEndRound !== data.round) Effects.playLose();
           }
           handledEndRound = data.round;
@@ -542,7 +601,10 @@ const App = (() => {
         return;
       }
 
-      // --- โหมด XO ออนไลน์ ---
+      // --- โหมด XO ออนไลน์ (รองรับทั้ง Classic & Vanishing) ---
+      xQueue = Array.isArray(data.xQueue) ? data.xQueue : [];
+      oQueue = Array.isArray(data.oQueue) ? data.oQueue : [];
+
       const isBoardChanged = JSON.stringify(board) !== JSON.stringify(syncedBoard);
       if (isBoardChanged) {
         board = syncedBoard;
@@ -550,6 +612,8 @@ const App = (() => {
         if (board.some(c => c !== null)) {
           Effects.playMove(data.turn === 'X' ? 'O' : 'X');
         }
+      } else if (variant === 'vanishing') {
+        render();
       }
 
       if (data.status === 'waiting') {
@@ -565,21 +629,23 @@ const App = (() => {
         currentState = State.GAME_OVER;
         UI.setBoardInteractive(false);
         stopTimer();
+        clearVanishingPulse();
 
+        const rematchAlert = (data.rematch && data.rematch[oppSymbol]) ? ` · 🔥 ${oppName} ขอแก้มือ!` : '';
         if (status.status === 'win') {
           UI.highlightWinningLine(status.line);
           if (status.winner === mySymbol) {
-            UI.setStatus(`${myName} wins! 🎉`);
+            UI.setStatus(`${myName} wins! 🎉${rematchAlert}`);
             if (handledEndRound !== data.round) {
               Effects.playWin();
               Effects.confettiBurst(getAccentRgb('--accent-x-rgb', '34, 224, 255'));
             }
           } else {
-            UI.setStatus(`${oppName} wins!`);
+            UI.setStatus(`${oppName} wins!${rematchAlert}`);
             if (handledEndRound !== data.round) Effects.playLose();
           }
         } else {
-          UI.setStatus("It's a tie!");
+          UI.setStatus(`It's a tie!${rematchAlert}`);
           if (handledEndRound !== data.round) Effects.playTie();
         }
         handledEndRound = data.round;
@@ -600,7 +666,42 @@ const App = (() => {
     });
   }
 
+  function updateRematchButtonState(rematchObj, mySym, oppSym, oppName) {
+    const btn = document.getElementById('restart-btn');
+    if (!btn) return;
+    if (!rematchObj) {
+      resetRestartButtonUI();
+      return;
+    }
+
+    if (rematchObj[mySym] && !rematchObj[oppSym]) {
+      btn.textContent = `⏳ รอ ${oppName} ตอบรับ...`;
+      btn.classList.add('waiting-rematch');
+      btn.classList.remove('rematch-highlight');
+    } else if (!rematchObj[mySym] && rematchObj[oppSym]) {
+      btn.textContent = `🔥 ตอบรับคำท้า (${oppName})`;
+      btn.classList.add('rematch-highlight');
+      btn.classList.remove('waiting-rematch');
+    } else {
+      resetRestartButtonUI();
+    }
+  }
+
+  function resetRestartButtonUI() {
+    const btn = document.getElementById('restart-btn');
+    if (!btn) return;
+    btn.textContent = 'Play Again';
+    btn.classList.remove('waiting-rematch', 'rematch-highlight');
+  }
+
   function leaveOnlineRoom() {
+    if (disconnectHandler) {
+      disconnectHandler.cancel();
+      disconnectHandler = null;
+    }
+    if (currentRoomId && mySymbol) {
+      update(ref(db, `rooms/${currentRoomId}/presence`), { [mySymbol]: false }).catch(() => {});
+    }
     if (roomListenerRef) {
       off(roomListenerRef);
       roomListenerRef = null;
@@ -635,8 +736,6 @@ const App = (() => {
       : [];
 
     container.innerHTML = '';
-
-    // ถ้าเล่นออนไลน์ฝั่ง O ให้กลับด้านกระดานให้เบี้ยชมพูอยู่ด้านล่างของจอตัวเอง
     const flipBoard = isOnline && mySymbol === 'O';
 
     for (let visualIdx = 0; visualIdx < 64; visualIdx++) {
@@ -677,7 +776,6 @@ const App = (() => {
         }
         cell.appendChild(pieceEl);
       }
-
       container.appendChild(cell);
     }
   }
@@ -720,7 +818,6 @@ const App = (() => {
       return;
     }
 
-    // โหมดเล่นกับ AI
     if (result.canContinueCapture) {
       chkForcedIdx = result.nextForcedIndex;
       chkSelectedIdx = result.nextForcedIndex;
@@ -794,19 +891,68 @@ const App = (() => {
     UI.renderScoreboard(chkScores);
   }
 
-  // ==================== TIC-TAC-TOE LOGIC ====================
+  // ==================== TIC-TAC-TOE & VANISHING LOGIC ====================
+  /** คำนวณการวางหมากสำหรับโหมด Classic และ Vanishing XO */
+  function applyXoMoveWithVariant(curBoard, index, player, curXQueue, curOQueue) {
+    const nextBoard = [...curBoard];
+    const nextX = [...curXQueue];
+    const nextO = [...curOQueue];
+
+    if (xoVariant === 'vanishing') {
+      const queue = player === 'X' ? nextX : nextO;
+      if (queue.length >= 3) {
+        const oldestIdx = queue.shift();
+        nextBoard[oldestIdx] = null;
+      }
+      queue.push(index);
+    }
+
+    nextBoard[index] = player;
+    return { board: nextBoard, xQueue: nextX, oQueue: nextO };
+  }
+
+  /** บอท AI สำหรับโหมด Vanishing XO (จำลองลำดับหมากหายล่วงหน้า) */
+  function getBestVanishingMove(curBoard, aiSym, humanSym, curXQueue, curOQueue) {
+    const available = [];
+    for (let i = 0; i < 9; i++) {
+      if (curBoard[i] === null) available.push(i);
+    }
+    if (available.length === 0) return -1;
+
+    // 1. หาตาเดินที่ชนะทันที
+    for (const idx of available) {
+      const sim = applyXoMoveWithVariant(curBoard, idx, aiSym, curXQueue, curOQueue);
+      if (GameEngine.getGameStatus(sim.board).winner === aiSym) return idx;
+    }
+
+    // 2. หาตาเดินที่บล็อกไม่ให้ผู้เล่นชนะในตาถัดไป
+    for (const idx of available) {
+      const simHuman = applyXoMoveWithVariant(curBoard, idx, humanSym, curXQueue, curOQueue);
+      if (GameEngine.getGameStatus(simHuman.board).winner === humanSym) return idx;
+    }
+
+    // 3. ยึดช่องกลางหรือมุมกระดาน
+    if (available.includes(4)) return 4;
+    const corners = [0, 2, 6, 8].filter(c => available.includes(c));
+    if (corners.length > 0) return corners[Math.floor(Math.random() * corners.length)];
+
+    return available[Math.floor(Math.random() * available.length)];
+  }
+
   async function handleXoCellClick(index) {
     if (board[index] !== null) return;
 
     if (isOnline) {
       if (currentState !== State.ONLINE_MY_TURN) return;
 
-      const nextBoard = GameEngine.makeMove(board, index, mySymbol);
+      const applied = applyXoMoveWithVariant(board, index, mySymbol, xQueue, oQueue);
       const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
-      const status = GameEngine.getGameStatus(nextBoard);
+      const status = GameEngine.getGameStatus(applied.board);
 
       const updates = {
-        board: nextBoard.map(c => c === null ? "" : c),
+        board: applied.board.map(c => c === null ? "" : c),
+        xQueue: applied.xQueue,
+        oQueue: applied.oQueue,
         turn: oppSymbol
       };
 
@@ -836,7 +982,11 @@ const App = (() => {
 
     if (currentState !== State.PLAYER_TURN) return;
 
-    board = GameEngine.makeMove(board, index, HUMAN_PLAYER);
+    const applied = applyXoMoveWithVariant(board, index, HUMAN_PLAYER, xQueue, oQueue);
+    board = applied.board;
+    xQueue = applied.xQueue;
+    oQueue = applied.oQueue;
+
     Effects.playMove(HUMAN_PLAYER);
     render();
 
@@ -849,24 +999,40 @@ const App = (() => {
     takeAiTurn();
   }
 
+  /** ระบบกด Play Again / ขอแก้มือ (Rematch Request) ในห้องออนไลน์ */
   async function handleRestartClick() {
     if (isOnline && currentRoomId) {
-      const snapshot = await get(ref(db, 'rooms/' + currentRoomId));
+      const roomRef = ref(db, 'rooms/' + currentRoomId);
+      const snapshot = await get(roomRef);
       if (!snapshot.exists()) return;
       const data = snapshot.val();
       if (data.status === 'waiting') return;
 
-      const nextStarter = (data.round % 2 === 1) ? 'O' : 'X';
-      const resetBoard = (data.game === 'checkers')
-        ? CheckersEngine.createBoard().map(c => c === null ? "" : c)
-        : Array(9).fill("");
+      const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
+      const rematch = data.rematch || { X: false, O: false };
 
-      await update(ref(db, 'rooms/' + currentRoomId), {
-        board: resetBoard,
-        turn: nextStarter,
-        forcedIdx: -1,
-        round: (data.round || 1) + 1
-      });
+      // หากอีกฝั่งกดขอแก้มือไว้แล้ว หรือเกมยังไม่จบ -> เริ่มรอบใหม่ทันที
+      if (rematch[oppSymbol] || currentState !== State.GAME_OVER) {
+        const nextStarter = (data.round % 2 === 1) ? 'O' : 'X';
+        const resetBoard = (data.game === 'checkers')
+          ? CheckersEngine.createBoard().map(c => c === null ? "" : c)
+          : Array(9).fill("");
+
+        await update(roomRef, {
+          board: resetBoard,
+          xQueue: [],
+          oQueue: [],
+          turn: nextStarter,
+          forcedIdx: -1,
+          rematch: { X: false, O: false },
+          round: (data.round || 1) + 1
+        });
+      } else {
+        // ส่งคำขอแก้มือให้อีกฝั่งทราบ
+        await update(roomRef, {
+          [`rematch/${mySymbol}`]: true
+        });
+      }
       return;
     }
 
@@ -887,8 +1053,15 @@ const App = (() => {
     setTimeout(() => {
       if (thisRound !== roundId || isOnline) return;
 
-      const move = AI.getBestMove(board, AI_PLAYER, HUMAN_PLAYER);
-      board = GameEngine.makeMove(board, move, AI_PLAYER);
+      const move = xoVariant === 'vanishing'
+        ? getBestVanishingMove(board, AI_PLAYER, HUMAN_PLAYER, xQueue, oQueue)
+        : AI.getBestMove(board, AI_PLAYER, HUMAN_PLAYER);
+
+      const applied = applyXoMoveWithVariant(board, move, AI_PLAYER, xQueue, oQueue);
+      board = applied.board;
+      xQueue = applied.xQueue;
+      oQueue = applied.oQueue;
+
       Effects.playMove(AI_PLAYER);
       render();
 
@@ -908,6 +1081,7 @@ const App = (() => {
     currentState = State.GAME_OVER;
     UI.setBoardInteractive(false);
     stopTimer();
+    clearVanishingPulse();
 
     if (status.status === 'win') {
       UI.highlightWinningLine(status.line);
@@ -935,6 +1109,8 @@ const App = (() => {
   function startRound() {
     if (isOnline) return;
     board = GameEngine.createBoard();
+    xQueue = [];
+    oQueue = [];
     roundId += 1;
     UI.clearHighlights();
     render();
@@ -1080,8 +1256,24 @@ const App = (() => {
     try { localStorage.setItem(BEST_STREAK_STORAGE_KEY, String(val)); } catch (e) {}
   }
 
+  function clearVanishingPulse() {
+    document.querySelectorAll('#board .cell').forEach(c => c.classList.remove('vanishing-next'));
+  }
+
   function render() {
     UI.renderBoard(board);
+    clearVanishingPulse();
+
+    // ในโหมดหมากจางหาย ให้กระพริบตัวหมากตัวที่เก่าที่สุดที่จะหายไปในตาถัดไป
+    if (xoVariant === 'vanishing' && currentState !== State.GAME_OVER) {
+      const cells = document.querySelectorAll('#board .cell');
+      if (xQueue.length === 3 && cells[xQueue[0]]) {
+        cells[xQueue[0]].classList.add('vanishing-next');
+      }
+      if (oQueue.length === 3 && cells[oQueue[0]]) {
+        cells[oQueue[0]].classList.add('vanishing-next');
+      }
+    }
   }
 
   return { init };

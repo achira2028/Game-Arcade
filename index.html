@@ -21,7 +21,13 @@
       <!-- แถบเลือกเกมที่จะเล่น -->
       <div class="game-selector" role="group" aria-label="Choose Game">
         <button type="button" class="game-tab active" data-game="xo">❌⭕ Tic-Tac-Toe</button>
-        <button type="button" class="game-tab" data-game="checkers">♟️ หมากฮอสสสสส์</button>
+        <button type="button" class="game-tab" data-game="checkers">♟️ หมากฮอสไทย</button>
+      </div>
+
+      <!-- ตัวเลือกโหมดย่อยสำหรับ XO (Classic vs หมากจางหาย) -->
+      <div id="xo-variant-selector" class="variant-selector" role="group" aria-label="XO Mode">
+        <button type="button" class="variant-pill active" data-variant="classic">Classic (3×3)</button>
+        <button type="button" class="variant-pill" data-variant="vanishing">👻 หมากจางหาย</button>
       </div>
 
       <!-- ช่องตั้งชื่อเล่น & ป้าย Best Win Streak -->

@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- ================= HOME OVERLAY (หน้าแรกแบบ Clean Glassmorphism) ================= -->
+  <!-- ================= HOME OVERLAY (หน้าแรก + Global Win Streak Rank) ================= -->
   <div id="home-overlay" class="home-overlay">
     <div class="home-card">
       <div class="home-logo">
@@ -23,7 +23,7 @@
         <label for="nickname-input" class="home-label">Nickname</label>
         <input type="text" id="nickname-input" class="home-input" placeholder="Player 1" maxlength="15" />
         <div id="home-best-streak" class="best-streak-badge" style="display: none;">
-          🔥 Best Streak: <span id="best-streak-value">0</span> Wins
+          🔥 Your Best Streak: <span id="best-streak-value">0</span> Wins
         </div>
       </div>
 
@@ -44,9 +44,17 @@
           </button>
         </div>
       </div>
+
+      <!-- ตารางจัดอันดับ Global Win Streak -->
+      <div class="leaderboard-box">
+        <div class="leaderboard-title">🏆 Top Win Streaks</div>
+        <ul id="leaderboard-list" class="leaderboard-list">
+          <li class="leaderboard-empty">Loading...</li>
+        </ul>
+      </div>
     </div>
   </div>
-  <!-- ================================================================================= -->
+  <!-- =================================================================================== -->
 
   <div class="app">
 
@@ -86,7 +94,7 @@
       </div>
     </header>
 
-    <!-- แถบแจ้งสถานะห้องออนไลน์ & ปุ่ม Copy Link (แสดงเฉพาะตอนเล่นออนไลน์) -->
+    <!-- แถบแจ้งสถานะห้องออนไลน์ & ปุ่ม Copy Link -->
     <div id="online-room-bar" class="online-room-bar" style="display: none;">
       <span id="room-info-text" class="room-info-text">Room #0000</span>
       <button type="button" id="copy-link-btn" class="copy-link-btn">📋 Copy Link</button>

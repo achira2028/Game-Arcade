@@ -18,7 +18,7 @@ const db = getDatabase(firebaseApp);
 const App = (() => {
   const HUMAN_PLAYER = 'X';
   const AI_PLAYER = 'O';
-  const AI_THINK_DELAY_MS = 400;
+  const AI_THINK_DELAY_MS = 500;
   const SCORES_STORAGE_KEY = 'tic-tac-toe-scores';
   const SKIN_STORAGE_KEY = 'tic-tac-toe-skin';
   const NICKNAME_STORAGE_KEY = 'tic-tac-toe-nickname';
@@ -30,6 +30,13 @@ const App = (() => {
     { id: 'lines', x: '＋', o: '◇' },
     { id: 'arrows', x: '▲', o: '▼' }
   ];
+
+  const COLOR_THAI = {
+    cyan: 'ฟ้า (Cyan)',
+    pink: 'ชมพู (Pink)',
+    violet: 'ม่วง (Violet)',
+    amber: 'ส้ม (Amber)'
+  };
 
   const SVG_VOL_ON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
   const SVG_VOL_OFF = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
@@ -43,10 +50,11 @@ const App = (() => {
     GAME_OVER: 'GAME_OVER'
   };
 
-  let selectedGame = 'xo';
+  let selectedGame = 'xo';         // 'xo' | 'checkers' | 'uno'
   let xoVariant = 'classic';
   let timeControl = 'none';
 
+  // XO State
   let board = GameEngine.createBoard();
   let xQueue = [];
   let oQueue = [];
@@ -56,12 +64,26 @@ const App = (() => {
   let skinIndex = loadSkinIndex();
   let roundId = 0;
 
+  // Checkers State
   let chkBoard = CheckersEngine.createBoard();
   let chkTurn = 'X';
   let chkSelectedIdx = null;
   let chkForcedIdx = null;
   let chkScores = { player: 0, ai: 0, ties: 0 };
 
+  // UNO (Color Switch) State
+  let unoState = {
+    deck: [],
+    handX: [],
+    handO: [],
+    topCard: null,
+    activeColor: 'cyan',
+    turn: 'X',
+    pendingWildCardId: null
+  };
+  let unoScores = { player: 0, ai: 0, ties: 0 };
+
+  // Timers
   let elapsedSeconds = 0;
   let turnRemaining = 15;
   let chessTimeX = 60;
@@ -72,6 +94,7 @@ const App = (() => {
   let nickname = loadNickname();
   let bestStreak = loadBestStreak();
 
+  // Online & Rematch
   let isOnline = false;
   let currentRoomId = null;
   let mySymbol = null;
@@ -211,6 +234,10 @@ const App = (() => {
       if (logo) logo.innerHTML = '<span class="disc-x" style="width:20px;height:20px;border-radius:50%;display:inline-block;"></span><span class="disc-o" style="width:20px;height:20px;border-radius:50%;display:inline-block;"></span>';
       if (title) title.textContent = 'หมากฮอสไทย';
       if (variantBox) variantBox.style.display = 'none';
+    } else if (selectedGame === 'uno') {
+      if (logo) logo.innerHTML = '<span class="mini-card c-x">+2</span><span class="mini-card c-o">7</span>';
+      if (title) title.textContent = 'COLOR SWITCH (UNO)';
+      if (variantBox) variantBox.style.display = 'none';
     } else {
       if (logo) logo.innerHTML = '<span class="logo-x">✕</span><span class="logo-o">○</span>';
       if (title) title.textContent = 'TIC-TAC-TOE';
@@ -257,6 +284,7 @@ const App = (() => {
 
     const xoBoardEl = document.getElementById('board');
     const chkBoardEl = document.getElementById('checkers-board');
+    const unoBoardEl = document.getElementById('uno-board');
     const headerTitle = document.getElementById('header-game-title');
     const skinCtrl = document.getElementById('skin-picker-control');
     const kbdHint = document.getElementById('kbd-hint');
@@ -271,15 +299,22 @@ const App = (() => {
       if (chessClockBox) chessClockBox.style.display = 'none';
     }
 
+    if (xoBoardEl) xoBoardEl.style.display = 'none';
+    if (chkBoardEl) chkBoardEl.style.display = 'none';
+    if (unoBoardEl) unoBoardEl.style.display = 'none';
+
     if (gameType === 'checkers') {
-      if (xoBoardEl) xoBoardEl.style.display = 'none';
       if (chkBoardEl) chkBoardEl.style.display = 'grid';
       if (headerTitle) headerTitle.textContent = 'หมากฮอสไทย (Checkers)';
       if (skinCtrl) skinCtrl.style.display = 'none';
       if (kbdHint) kbdHint.innerHTML = 'คลิกเลือกเบี้ยของคุณ แล้วกดช่องจุดสีเขียวเพื่อเดิน (บังคับกินเมื่อมีจังหวะ)';
+    } else if (gameType === 'uno') {
+      if (unoBoardEl) unoBoardEl.style.display = 'flex';
+      if (headerTitle) headerTitle.textContent = 'Color Switch (UNO)';
+      if (skinCtrl) skinCtrl.style.display = 'none';
+      if (kbdHint) kbdHint.innerHTML = 'ลงไพ่ที่สีตรงกัน หรือตัวเลข/สัญลักษณ์ตรงกัน · ทิ้งไพ่หมดมือก่อนชนะ';
     } else {
       if (xoBoardEl) xoBoardEl.style.display = 'grid';
-      if (chkBoardEl) chkBoardEl.style.display = 'none';
       if (headerTitle) headerTitle.textContent = variant === 'vanishing' ? 'XO หมากจางหาย' : 'Tic-Tac-Toe';
       if (skinCtrl) skinCtrl.style.display = 'flex';
       if (kbdHint) {
@@ -376,6 +411,15 @@ const App = (() => {
       if (scoreLabelAi) scoreLabelAi.textContent = 'AI (ชมพู)';
       UI.renderScoreboard(chkScores);
       startCheckersRound();
+    } else if (selectedGame === 'uno') {
+      if (firstMoveCtrl) firstMoveCtrl.style.display = 'none';
+      if (modeBadge) modeBadge.textContent = timeTag ? `UNO AI · ${timeTag}` : 'UNO AI';
+      if (markX) markX.textContent = 'Player 1';
+      if (markO) markO.textContent = 'AI';
+      if (scoreLabelPlayer) scoreLabelPlayer.textContent = nickname;
+      if (scoreLabelAi) scoreLabelAi.textContent = 'AI';
+      UI.renderScoreboard(unoScores);
+      startUnoRound();
     } else {
       if (firstMoveCtrl) firstMoveCtrl.style.display = 'flex';
       if (modeBadge) {
@@ -406,6 +450,10 @@ const App = (() => {
       ? CheckersEngine.createBoard().map(c => c === null ? "" : c)
       : Array(9).fill("");
 
+    const initialUnoData = selectedGame === 'uno'
+      ? UnoEngine.dealGame()
+      : null;
+
     await set(ref(db, 'rooms/' + roomId), {
       game: selectedGame,
       variant: xoVariant,
@@ -413,6 +461,7 @@ const App = (() => {
       chessTime: { X: 60, O: 60 },
       timeoutWinner: "",
       board: initialBoard,
+      unoData: initialUnoData,
       xQueue: [],
       oQueue: [],
       turn: 'X',
@@ -492,7 +541,7 @@ const App = (() => {
 
     const sideText = selectedGame === 'checkers'
       ? (mySymbol === 'X' ? 'เบี้ยฟ้า' : 'เบี้ยชมพู')
-      : mySymbol;
+      : (selectedGame === 'uno' ? (mySymbol === 'X' ? 'Player 1' : 'Player 2') : mySymbol);
 
     if (roomBar) roomBar.style.display = 'flex';
     if (roomInfoText) roomInfoText.textContent = `Room #${roomId} (${sideText})`;
@@ -508,6 +557,9 @@ const App = (() => {
       if (selectedGame === 'checkers') {
         markX.textContent = mySymbol === 'X' ? 'เบี้ยฟ้า' : 'เบี้ยชมพู';
         markO.textContent = mySymbol === 'X' ? 'เบี้ยชมพู' : 'เบี้ยฟ้า';
+      } else if (selectedGame === 'uno') {
+        markX.textContent = mySymbol === 'X' ? 'Player 1' : 'Player 2';
+        markO.textContent = mySymbol === 'X' ? 'Player 2' : 'Player 1';
       } else {
         markX.textContent = mySymbol === 'X' ? SKINS[skinIndex].x : SKINS[skinIndex].o;
         markO.textContent = mySymbol === 'X' ? SKINS[skinIndex].o : SKINS[skinIndex].x;
@@ -530,13 +582,11 @@ const App = (() => {
         configureBoardView(gameType, variant, roomTc);
       }
 
-      const expectedLen = gameType === 'checkers' ? 64 : 9;
-      const syncedBoard = (data.board || Array(expectedLen).fill("")).map(c => c === "" ? null : c);
-
       if (data.round !== lastOnlineRound) {
         lastOnlineRound = data.round;
         handledEndRound = 0;
         chkSelectedIdx = null;
+        unoState.pendingWildCardId = null;
         chessTimeX = 60;
         chessTimeO = 60;
         resetRestartButtonUI();
@@ -572,8 +622,8 @@ const App = (() => {
 
       const scoreLabelPlayer = document.getElementById('score-label-player');
       const scoreLabelAi = document.getElementById('score-label-ai');
-      const myTag = gameType === 'checkers' ? (mySymbol === 'X' ? 'ฟ้า' : 'ชมพู') : mySymbol;
-      const oppTag = gameType === 'checkers' ? (oppSymbol === 'X' ? 'ฟ้า' : 'ชมพู') : oppSymbol;
+      const myTag = gameType === 'checkers' ? (mySymbol === 'X' ? 'ฟ้า' : 'ชมพู') : (gameType === 'uno' ? 'P1' : mySymbol);
+      const oppTag = gameType === 'checkers' ? (oppSymbol === 'X' ? 'ฟ้า' : 'ชมพู') : (gameType === 'uno' ? 'P2' : oppSymbol);
 
       if (scoreLabelPlayer) {
         const streakTag = myStreak >= 2 ? `<span class="streak-pill">${myStreak}W</span>` : '';
@@ -593,6 +643,73 @@ const App = (() => {
       }
 
       updateRematchButtonState(data.rematch, mySymbol, oppSymbol, oppName);
+
+      // --- 1. โหมดเกมไพ่ UNO (Color Switch) ออนไลน์ ---
+      if (gameType === 'uno') {
+        const ud = data.unoData || {};
+        unoState.deck = Array.isArray(ud.deck) ? ud.deck : [];
+        unoState.handX = Array.isArray(ud.handX) ? ud.handX : [];
+        unoState.handO = Array.isArray(ud.handO) ? ud.handO : [];
+        unoState.topCard = ud.topCard || null;
+        unoState.activeColor = ud.activeColor || 'cyan';
+        unoState.turn = data.turn || 'X';
+
+        if (data.status === 'waiting') {
+          currentState = State.ONLINE_WAIT;
+          renderUnoBoard(myName, oppName);
+          UI.setStatus(`รอเพื่อนเข้าห้อง (รหัส ${roomId})`);
+          stopTimer();
+          return;
+        }
+
+        if (data.timeoutWinner) {
+          currentState = State.GAME_OVER;
+          stopTimer();
+          renderUnoBoard(myName, oppName);
+          const rematchAlert = (data.rematch && data.rematch[oppSymbol]) ? ` · ${oppName} ขอแก้มือ` : '';
+          UI.setStatus(data.timeoutWinner === mySymbol ? `หมดเวลา · ${myName} ชนะ${rematchAlert}` : `หมดเวลา · ${oppName} ชนะ${rematchAlert}`);
+          return;
+        }
+
+        if (unoState.handX.length === 0 || unoState.handO.length === 0) {
+          currentState = State.GAME_OVER;
+          stopTimer();
+          renderUnoBoard(myName, oppName);
+          const winnerSym = unoState.handX.length === 0 ? 'X' : 'O';
+          const rematchAlert = (data.rematch && data.rematch[oppSymbol]) ? ` · ${oppName} ขอแก้มือ` : '';
+          if (winnerSym === mySymbol) {
+            UI.setStatus(`${myName} ชนะ UNO${rematchAlert}`);
+            if (handledEndRound !== data.round) {
+              Effects.playWin();
+              Effects.confettiBurst(getAccentRgb('--accent-x-rgb', '34, 224, 255'));
+            }
+          } else {
+            UI.setStatus(`${oppName} ชนะ UNO${rematchAlert}`);
+            if (handledEndRound !== data.round) Effects.playLose();
+          }
+          handledEndRound = data.round;
+          return;
+        }
+
+        if (unoState.turn === mySymbol) {
+          const wasNotMyTurn = currentState !== State.ONLINE_MY_TURN;
+          currentState = State.ONLINE_MY_TURN;
+          if (wasNotMyTurn) startTurnOrChessTimer(mySymbol);
+          UI.setStatus(`ตาของคุณ · สีปัจจุบัน: ${COLOR_THAI[unoState.activeColor]}`);
+        } else {
+          const wasMyTurn = currentState !== State.ONLINE_OPPONENT_TURN;
+          currentState = State.ONLINE_OPPONENT_TURN;
+          unoState.pendingWildCardId = null;
+          if (wasMyTurn) startTurnOrChessTimer(oppSymbol);
+          UI.setStatus(`รอ ${oppName} ลงไพ่...`);
+        }
+        renderUnoBoard(myName, oppName);
+        return;
+      }
+
+      // --- 2. ตรวจสอบการแพ้ฟาวล์เพราะหมดเวลา (XO & Checkers) ---
+      const expectedLen = gameType === 'checkers' ? 64 : 9;
+      const syncedBoard = (data.board || Array(expectedLen).fill("")).map(c => c === "" ? null : c);
 
       if (data.timeoutWinner) {
         currentState = State.GAME_OVER;
@@ -623,6 +740,7 @@ const App = (() => {
         return;
       }
 
+      // --- 3. โหมดหมากฮอสไทยออนไลน์ ---
       if (gameType === 'checkers') {
         chkBoard = syncedBoard;
         chkTurn = data.turn || 'X';
@@ -674,6 +792,7 @@ const App = (() => {
         return;
       }
 
+      // --- 4. โหมด XO ออนไลน์ ---
       xQueue = Array.isArray(data.xQueue) ? data.xQueue : [];
       oQueue = Array.isArray(data.oQueue) ? data.oQueue : [];
 
@@ -738,6 +857,292 @@ const App = (() => {
         UI.setStatus(`Waiting for ${oppName} (${oppSymbol})…`);
       }
     });
+  }
+
+  // ==================== UNO (COLOR SWITCH) LOGIC & RENDER ====================
+  function startUnoRound() {
+    const dealt = UnoEngine.dealGame();
+    unoState = {
+      deck: dealt.deck,
+      handX: dealt.handX,
+      handO: dealt.handO,
+      topCard: dealt.topCard,
+      activeColor: dealt.activeColor,
+      turn: 'X',
+      pendingWildCardId: null
+    };
+    chessTimeX = 60;
+    chessTimeO = 60;
+    currentState = State.PLAYER_TURN;
+    renderUnoBoard(nickname, 'AI');
+    startTurnOrChessTimer('X');
+    UI.setStatus(`ตาของคุณ · สีปัจจุบัน: ${COLOR_THAI[unoState.activeColor]}`);
+  }
+
+  function buildUnoCardHtml(card, extraClass = '') {
+    if (!card) return '';
+    const subText = card.type === 'number' ? card.color : card.type;
+    return `
+      <div class="uno-card color-${card.color} ${extraClass}" data-card-id="${card.id}">
+        <span class="u-main">${card.label}</span>
+        <span class="u-sub">${subText}</span>
+      </div>
+    `;
+  }
+
+  function renderUnoBoard(nameMe = nickname, nameOpp = 'AI') {
+    const container = document.getElementById('uno-board');
+    if (!container) return;
+
+    const mySide = isOnline ? mySymbol : 'X';
+    const myHand = mySide === 'X' ? unoState.handX : unoState.handO;
+    const oppHand = mySide === 'X' ? unoState.handO : unoState.handX;
+    const isMyTurn = isOnline ? (currentState === State.ONLINE_MY_TURN) : (currentState === State.PLAYER_TURN);
+
+    const oppCardsHtml = oppHand.map(() => `<div class="uno-card card-back"></div>`).join('');
+    const topCardHtml = buildUnoCardHtml(unoState.topCard);
+
+    const myCardsHtml = myHand.map(card => {
+      const canPlay = isMyTurn && UnoEngine.canPlayCard(card, unoState.topCard, unoState.activeColor);
+      return buildUnoCardHtml(card, canPlay ? 'playable' : 'unplayable');
+    }).join('');
+
+    const wildPickerHtml = unoState.pendingWildCardId ? `
+      <div class="wild-picker-bar">
+        <span class="uno-row-label">เลือกสีใหม่:</span>
+        <button type="button" class="wild-color-btn cyan" data-pick-color="cyan">Cyan</button>
+        <button type="button" class="wild-color-btn pink" data-pick-color="pink">Pink</button>
+        <button type="button" class="wild-color-btn violet" data-pick-color="violet">Violet</button>
+        <button type="button" class="wild-color-btn amber" data-pick-color="amber">Amber</button>
+      </div>
+    ` : '';
+
+    container.innerHTML = `
+      <div class="uno-row">
+        <span class="uno-row-label">${escapeHtml(nameOpp)} · เหลือ ${oppHand.length} ใบ</span>
+        <div class="uno-hand">${oppCardsHtml}</div>
+      </div>
+
+      <div class="uno-center-table">
+        <button type="button" id="uno-draw-btn" class="uno-deck-btn" ${isMyTurn ? '' : 'disabled'}>
+          <span>DRAW</span>
+          <span style="font-size:0.62rem;color:var(--muted);">จั่ว 1 ใบ</span>
+        </button>
+
+        ${topCardHtml}
+
+        <div class="uno-color-indicator">
+          <span>สีปัจจุบัน</span>
+          <span class="active-color-pill ${unoState.activeColor}">${unoState.activeColor}</span>
+        </div>
+      </div>
+
+      ${wildPickerHtml}
+
+      <div class="uno-row">
+        <div class="uno-hand" id="uno-my-hand">${myCardsHtml}</div>
+        <span class="uno-row-label">${escapeHtml(nameMe)} · เหลือ ${myHand.length} ใบ</span>
+      </div>
+    `;
+
+    if (isMyTurn) {
+      const drawBtn = document.getElementById('uno-draw-btn');
+      if (drawBtn) {
+        drawBtn.addEventListener('click', () => handleUnoDraw());
+      }
+
+      container.querySelectorAll('#uno-my-hand .uno-card.playable').forEach(el => {
+        el.addEventListener('click', () => {
+          const cid = el.dataset.cardId;
+          const cardObj = myHand.find(c => c.id === cid);
+          if (!cardObj) return;
+          if (cardObj.type === 'wild') {
+            unoState.pendingWildCardId = cid;
+            renderUnoBoard(nameMe, nameOpp);
+          } else {
+            handleUnoPlayCard(cid, cardObj.color);
+          }
+        });
+      });
+
+      container.querySelectorAll('.wild-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const chosenColor = btn.dataset.pickColor;
+          const cid = unoState.pendingWildCardId;
+          unoState.pendingWildCardId = null;
+          if (cid) handleUnoPlayCard(cid, chosenColor);
+        });
+      });
+    }
+  }
+
+  async function handleUnoPlayCard(cardId, chosenColor) {
+    const mySide = isOnline ? mySymbol : 'X';
+    const oppSide = mySide === 'X' ? 'O' : 'X';
+    const myHand = mySide === 'X' ? [...unoState.handX] : [...unoState.handO];
+    let oppHand = oppSide === 'X' ? [...unoState.handX] : [...unoState.handO];
+    let deck = [...unoState.deck];
+
+    const idx = myHand.findIndex(c => c.id === cardId);
+    if (idx === -1) return;
+    const playedCard = myHand.splice(idx, 1)[0];
+    Effects.playMove(mySide);
+
+    let nextTurn = oppSide;
+    if (playedCard.type === 'skip') {
+      nextTurn = mySide; // 2 คน: Skip = ได้ลงต่อทันที
+    } else if (playedCard.type === 'draw2') {
+      const res = UnoEngine.drawCardsFromDeck(deck, 2);
+      oppHand = [...oppHand, ...res.drawn];
+      deck = res.deck;
+      nextTurn = mySide; // +2 แล้วข้ามตาอีกฝั่ง
+    }
+
+    const nextHandX = mySide === 'X' ? myHand : oppHand;
+    const nextHandO = mySide === 'O' ? myHand : oppHand;
+
+    if (isOnline && currentRoomId) {
+      const updates = {
+        'unoData/deck': deck,
+        'unoData/handX': nextHandX,
+        'unoData/handO': nextHandO,
+        'unoData/topCard': playedCard,
+        'unoData/activeColor': chosenColor,
+        turn: nextTurn,
+        chessTime: { X: chessTimeX, O: chessTimeO }
+      };
+
+      if (myHand.length === 0) {
+        const snap = await get(ref(db, `rooms/${currentRoomId}`));
+        const rData = snap.val() || {};
+        const curScores = rData.scores || { X: 0, O: 0, ties: 0 };
+        const curStreaks = rData.streaks || { X: 0, O: 0 };
+        curScores[mySide] = (curScores[mySide] || 0) + 1;
+        curStreaks[mySide] = (curStreaks[mySide] || 0) + 1;
+        curStreaks[oppSide] = 0;
+        updates.scores = curScores;
+        updates.streaks = curStreaks;
+      }
+
+      await update(ref(db, 'rooms/' + currentRoomId), updates);
+      return;
+    }
+
+    // โหมด AI
+    unoState.deck = deck;
+    unoState.handX = nextHandX;
+    unoState.handO = nextHandO;
+    unoState.topCard = playedCard;
+    unoState.activeColor = chosenColor;
+    unoState.turn = nextTurn;
+
+    if (unoState.handX.length === 0) {
+      endUnoAiGame('X');
+      return;
+    }
+
+    renderUnoBoard(nickname, 'AI');
+    if (nextTurn === 'X') {
+      startTurnOrChessTimer('X');
+      UI.setStatus(`ลง ${playedCard.label} · ได้ลงต่ออีก 1 ตา`);
+    } else {
+      takeUnoAiTurn();
+    }
+  }
+
+  async function handleUnoDraw() {
+    const mySide = isOnline ? mySymbol : 'X';
+    const oppSide = mySide === 'X' ? 'O' : 'X';
+    const myHand = mySide === 'X' ? [...unoState.handX] : [...unoState.handO];
+    const res = UnoEngine.drawCardsFromDeck(unoState.deck, 1);
+    const updatedMyHand = [...myHand, ...res.drawn];
+    Effects.playMove(mySide);
+
+    if (isOnline && currentRoomId) {
+      await update(ref(db, 'rooms/' + currentRoomId), {
+        'unoData/deck': res.deck,
+        [`unoData/hand${mySide}`]: updatedMyHand,
+        turn: oppSide,
+        chessTime: { X: chessTimeX, O: chessTimeO }
+      });
+      return;
+    }
+
+    unoState.deck = res.deck;
+    unoState.handX = updatedMyHand;
+    unoState.turn = 'O';
+    renderUnoBoard(nickname, 'AI');
+    takeUnoAiTurn();
+  }
+
+  function takeUnoAiTurn() {
+    currentState = State.AI_TURN;
+    startTurnOrChessTimer('O');
+    UI.setStatus('AI กำลังคิด...');
+
+    setTimeout(() => {
+      if (isOnline || selectedGame !== 'uno' || currentState === State.GAME_OVER) return;
+
+      const decision = UnoEngine.chooseAiMove(unoState.handO, unoState.topCard, unoState.activeColor);
+      if (decision.action === 'draw') {
+        const res = UnoEngine.drawCardsFromDeck(unoState.deck, 1);
+        unoState.deck = res.deck;
+        unoState.handO = [...unoState.handO, ...res.drawn];
+        unoState.turn = 'X';
+        Effects.playMove('O');
+        currentState = State.PLAYER_TURN;
+        startTurnOrChessTimer('X');
+        renderUnoBoard(nickname, 'AI');
+        UI.setStatus(`AI จั่วไพ่ · ตาของคุณ (สี ${COLOR_THAI[unoState.activeColor]})`);
+        return;
+      }
+
+      const card = decision.card;
+      unoState.handO = unoState.handO.filter(c => c.id !== card.id);
+      unoState.topCard = card;
+      unoState.activeColor = decision.chosenColor;
+      Effects.playMove('O');
+
+      if (card.type === 'draw2') {
+        const res = UnoEngine.drawCardsFromDeck(unoState.deck, 2);
+        unoState.deck = res.deck;
+        unoState.handX = [...unoState.handX, ...res.drawn];
+      }
+
+      if (unoState.handO.length === 0) {
+        endUnoAiGame('O');
+        return;
+      }
+
+      if (card.type === 'skip' || card.type === 'draw2') {
+        renderUnoBoard(nickname, 'AI');
+        UI.setStatus(`AI ลง ${card.label} · AI ได้ลงต่อ`);
+        takeUnoAiTurn();
+      } else {
+        unoState.turn = 'X';
+        currentState = State.PLAYER_TURN;
+        startTurnOrChessTimer('X');
+        renderUnoBoard(nickname, 'AI');
+        UI.setStatus(`ตาของคุณ · สีปัจจุบัน: ${COLOR_THAI[unoState.activeColor]}`);
+      }
+    }, AI_THINK_DELAY_MS);
+  }
+
+  function endUnoAiGame(winner) {
+    currentState = State.GAME_OVER;
+    stopTimer();
+    renderUnoBoard(nickname, 'AI');
+    if (winner === 'X') {
+      unoScores.player += 1;
+      UI.setStatus('คุณชนะ UNO');
+      Effects.playWin();
+      Effects.confettiBurst(getAccentRgb('--accent-x-rgb', '34, 224, 255'));
+    } else {
+      unoScores.ai += 1;
+      UI.setStatus('AI ชนะ UNO');
+      Effects.playLose();
+    }
+    UI.renderScoreboard(unoScores);
   }
 
   function updateRematchButtonState(rematchObj, mySym, oppSym, oppName) {
@@ -894,26 +1299,16 @@ const App = (() => {
     clearVanishingPulse();
 
     if (selectedGame === 'checkers') {
-      if (winnerSide === 'X') {
-        chkScores.player += 1;
-        UI.setStatus('AI หมดเวลา · คุณชนะ');
-        Effects.playWin();
-      } else {
-        chkScores.ai += 1;
-        UI.setStatus('คุณหมดเวลา · AI ชนะ');
-        Effects.playLose();
-      }
+      if (winnerSide === 'X') { chkScores.player += 1; UI.setStatus('AI หมดเวลา · คุณชนะ'); Effects.playWin(); }
+      else { chkScores.ai += 1; UI.setStatus('คุณหมดเวลา · AI ชนะ'); Effects.playLose(); }
       UI.renderScoreboard(chkScores);
+    } else if (selectedGame === 'uno') {
+      if (winnerSide === 'X') { unoScores.player += 1; UI.setStatus('AI หมดเวลา · คุณชนะ'); Effects.playWin(); }
+      else { unoScores.ai += 1; UI.setStatus('คุณหมดเวลา · AI ชนะ'); Effects.playLose(); }
+      UI.renderScoreboard(unoScores);
     } else {
-      if (winnerSide === 'X') {
-        scores.player += 1;
-        UI.setStatus('AI หมดเวลา · คุณชนะ');
-        Effects.playWin();
-      } else {
-        scores.ai += 1;
-        UI.setStatus('คุณหมดเวลา · AI ชนะ');
-        Effects.playLose();
-      }
+      if (winnerSide === 'X') { scores.player += 1; UI.setStatus('AI หมดเวลา · คุณชนะ'); Effects.playWin(); }
+      else { scores.ai += 1; UI.setStatus('คุณหมดเวลา · AI ชนะ'); Effects.playLose(); }
       saveScores(scores);
       UI.renderScoreboard(scores);
     }
@@ -926,6 +1321,7 @@ const App = (() => {
     }
   }
 
+  // ==================== CHECKERS LOGIC & RENDER ====================
   function startCheckersRound() {
     chkBoard = CheckersEngine.createBoard();
     chkTurn = 'X';
@@ -1109,6 +1505,7 @@ const App = (() => {
     UI.renderScoreboard(chkScores);
   }
 
+  // ==================== TIC-TAC-TOE LOGIC ====================
   function applyXoMoveWithVariant(curBoard, index, player, curXQueue, curOQueue) {
     const nextBoard = [...curBoard];
     const nextX = [...curXQueue];
@@ -1229,8 +1626,13 @@ const App = (() => {
           ? CheckersEngine.createBoard().map(c => c === null ? "" : c)
           : Array(9).fill("");
 
+        const resetUnoData = (data.game === 'uno')
+          ? UnoEngine.dealGame()
+          : null;
+
         await update(roomRef, {
           board: resetBoard,
+          unoData: resetUnoData,
           xQueue: [],
           oQueue: [],
           turn: nextStarter,
@@ -1250,6 +1652,8 @@ const App = (() => {
 
     if (selectedGame === 'checkers') {
       startCheckersRound();
+    } else if (selectedGame === 'uno') {
+      startUnoRound();
     } else {
       startRound();
     }

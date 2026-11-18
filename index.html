@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- ================= HOME OVERLAY (เลือกเกม + โหมดเล่น) ================= -->
+  <!-- ================= HOME OVERLAY (เลือกเกม + โหมดเวลา + โหมดเล่น) ================= -->
   <div id="home-overlay" class="home-overlay">
     <div class="home-card">
       <div class="home-logo" id="home-logo-icon">
@@ -28,6 +28,17 @@
       <div id="xo-variant-selector" class="variant-selector" role="group" aria-label="XO Mode">
         <button type="button" class="variant-pill active" data-variant="classic">Classic (3×3)</button>
         <button type="button" class="variant-pill" data-variant="vanishing">👻 หมากจางหาย</button>
+      </div>
+
+      <!-- ตัวเลือกโหมดจับเวลา (ใช้ได้ทั้ง XO และ หมากฮอส) -->
+      <div class="home-field">
+        <span class="home-label">⏱ Time Control (กติกาเวลา)</span>
+        <div class="timer-selector" role="group" aria-label="Time Control">
+          <button type="button" class="timer-pill active" data-time="none">♾️ ไม่จำกัด</button>
+          <button type="button" class="timer-pill" data-time="turn10">⚡ ตาละ 10วิ</button>
+          <button type="button" class="timer-pill" data-time="turn15">⏳ ตาละ 15วิ</button>
+          <button type="button" class="timer-pill" data-time="chess60">♟️ คนละ 1นาที</button>
+        </div>
       </div>
 
       <!-- ช่องตั้งชื่อเล่น & ป้าย Best Win Streak -->
@@ -66,7 +77,7 @@
       </div>
     </div>
   </div>
-  <!-- ======================================================================= -->
+  <!-- ================================================================================== -->
 
   <div class="app">
 
@@ -81,9 +92,16 @@
       </div>
 
       <div class="header-right">
-        <div class="timer" aria-label="Match timer">
+        <!-- ตัวจับเวลาปกติ / นับถอยหลังรายตา -->
+        <div id="single-timer-box" class="timer" aria-label="Match timer">
           <span class="timer-icon" aria-hidden="true">⏱</span>
           <span id="timer-value" class="timer-value">00:00</span>
+        </div>
+
+        <!-- นาฬิกาหมากรุก (Chess Clock แยก 2 ฝั่ง) -->
+        <div id="chess-clock-box" class="chess-clock-box" style="display: none;">
+          <span id="clock-x" class="clock-badge clock-x">🔵 01:00</span>
+          <span id="clock-o" class="clock-badge clock-o">🔴 01:00</span>
         </div>
 
         <div class="scoreboard" aria-label="Scoreboard">

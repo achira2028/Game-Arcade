@@ -41,18 +41,31 @@ const App = (() => {
     GAME_OVER: 'GAME_OVER'
   };
 
+  // เกมที่เลือก ('xo' หรือ 'checkers')
+  let selectedGame = 'xo';
+
+  // สถานะเกม XO
   let board = GameEngine.createBoard();
   let currentState = State.PLAYER_TURN;
   let firstPlayer = HUMAN_PLAYER;
   let scores = loadScores();
   let skinIndex = loadSkinIndex();
   let roundId = 0;
+
+  // สถานะเกมหมากฮอส (Checkers)
+  let chkBoard = CheckersEngine.createBoard();
+  let chkTurn = 'X';
+  let chkSelectedIdx = null;
+  let chkForcedIdx = null;
+  let chkScores = { player: 0, ai: 0, ties: 0 };
+
   let elapsedSeconds = 0;
   let timerIntervalId = null;
 
   let nickname = loadNickname();
   let bestStreak = loadBestStreak();
 
+  // ออนไลน์
   let isOnline = false;
   let currentRoomId = null;
   let mySymbol = null;
@@ -62,7 +75,7 @@ const App = (() => {
 
   function init() {
     UI.init({
-      onCellClick: handleCellClick,
+      onCellClick: handleXoCellClick,
       onRestart: handleRestartClick,
       onFirstPlayerChange: handleFirstPlayerChange,
       onToggleMute: handleToggleMute,
@@ -94,6 +107,17 @@ const App = (() => {
     const codeInput = document.getElementById('home-room-code-input');
     const homeNavBtn = document.getElementById('home-nav-btn');
     const copyLinkBtn = document.getElementById('copy-link-btn');
+    const gameTabs = document.querySelectorAll('.game-tab');
+
+    // แท็บเลือกเกมบนหน้าแรก
+    gameTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        gameTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        selectedGame = tab.dataset.game;
+        updateHomeCardHeader();
+      });
+    });
 
     if (nickInput) {
       nickInput.value = nickname;
@@ -153,6 +177,18 @@ const App = (() => {
     }
   }
 
+  function updateHomeCardHeader() {
+    const logo = document.getElementById('home-logo-icon');
+    const title = document.getElementById('home-game-title');
+    if (selectedGame === 'checkers') {
+      if (logo) logo.innerHTML = '<span class="logo-x">●</span><span class="logo-o">●</span>';
+      if (title) title.textContent = 'หมากฮอสไทย';
+    } else {
+      if (logo) logo.innerHTML = '<span class="logo-x">✕</span><span class="logo-o">○</span>';
+      if (title) title.textContent = 'TIC-TAC-TOE';
+    }
+  }
+
   function syncNicknameFromInput() {
     const nickInput = document.getElementById('nickname-input');
     if (nickInput) {
@@ -175,6 +211,7 @@ const App = (() => {
         bestBadge.style.display = 'none';
       }
     }
+    updateHomeCardHeader();
     if (overlay) overlay.classList.remove('hidden');
     loadLeaderboard();
   }
@@ -184,7 +221,30 @@ const App = (() => {
     if (overlay) overlay.classList.add('hidden');
   }
 
-  /** บันทึกสถิติสูงสุดขึ้น Firebase Leaderboard */
+  /** สลับการแสดงผลกระดาน XO vs หมากฮอส */
+  function configureBoardView(gameType) {
+    selectedGame = gameType;
+    const xoBoardEl = document.getElementById('board');
+    const chkBoardEl = document.getElementById('checkers-board');
+    const headerTitle = document.getElementById('header-game-title');
+    const skinCtrl = document.getElementById('skin-picker-control');
+    const kbdHint = document.getElementById('kbd-hint');
+
+    if (gameType === 'checkers') {
+      if (xoBoardEl) xoBoardEl.style.display = 'none';
+      if (chkBoardEl) chkBoardEl.style.display = 'grid';
+      if (headerTitle) headerTitle.textContent = 'หมากฮอสไทย (Checkers)';
+      if (skinCtrl) skinCtrl.style.display = 'none';
+      if (kbdHint) kbdHint.innerHTML = 'คลิกเลือกเบี้ยของคุณ แล้วกดช่องจุดสีเขียวเพื่อเดิน (บังคับกินเมื่อมีจังหวะ)';
+    } else {
+      if (xoBoardEl) xoBoardEl.style.display = 'grid';
+      if (chkBoardEl) chkBoardEl.style.display = 'none';
+      if (headerTitle) headerTitle.textContent = 'Tic-Tac-Toe';
+      if (skinCtrl) skinCtrl.style.display = 'flex';
+      if (kbdHint) kbdHint.innerHTML = 'Tip: press <kbd>1</kbd>&ndash;<kbd>9</kbd> to play &middot; <kbd>R</kbd> to restart';
+    }
+  }
+
   async function submitLeaderboardScore(playerName, streakCount) {
     if (!playerName || streakCount < 1) return;
     try {
@@ -203,7 +263,6 @@ const App = (() => {
     } catch (e) {}
   }
 
-  /** ดึง Top 5 Win Streaks มาแสดงในหน้าแรก */
   async function loadLeaderboard() {
     const listEl = document.getElementById('leaderboard-list');
     if (!listEl) return;
@@ -237,10 +296,12 @@ const App = (() => {
     }
   }
 
+  /** เข้าสู่โหมดเล่นกับ AI (ทั้ง XO และ หมากฮอส) */
   function switchToAiMode() {
     isOnline = false;
     currentRoomId = null;
-    mySymbol = null;
+    mySymbol = 'X';
+    configureBoardView(selectedGame);
 
     const roomBar = document.getElementById('online-room-bar');
     const firstMoveCtrl = document.getElementById('first-player-control');
@@ -248,18 +309,34 @@ const App = (() => {
     const oppRole = document.getElementById('opponent-role-label');
     const scoreLabelPlayer = document.getElementById('score-label-player');
     const scoreLabelAi = document.getElementById('score-label-ai');
+    const markX = document.getElementById('mark-x');
+    const markO = document.getElementById('mark-o');
 
     if (roomBar) roomBar.style.display = 'none';
-    if (firstMoveCtrl) firstMoveCtrl.style.display = 'flex';
-    if (modeBadge) modeBadge.innerHTML = 'Minimax AI &middot; Unbeatable';
     if (oppRole) oppRole.textContent = 'Computer is';
-    if (scoreLabelPlayer) scoreLabelPlayer.textContent = `${nickname} (X)`;
-    if (scoreLabelAi) scoreLabelAi.textContent = 'AI (O)';
 
-    UI.renderScoreboard(scores);
-    startRound();
+    if (selectedGame === 'checkers') {
+      if (firstMoveCtrl) firstMoveCtrl.style.display = 'none';
+      if (modeBadge) modeBadge.textContent = 'Checkers AI · Alpha-Beta';
+      if (markX) markX.textContent = 'เบี้ยฟ้า';
+      if (markO) markO.textContent = 'เบี้ยชมพู';
+      if (scoreLabelPlayer) scoreLabelPlayer.textContent = `${nickname} (ฟ้า)`;
+      if (scoreLabelAi) scoreLabelAi.textContent = 'AI (ชมพู)';
+      UI.renderScoreboard(chkScores);
+      startCheckersRound();
+    } else {
+      if (firstMoveCtrl) firstMoveCtrl.style.display = 'flex';
+      if (modeBadge) modeBadge.innerHTML = 'Minimax AI &middot; Unbeatable';
+      if (markX) markX.textContent = SKINS[skinIndex].x;
+      if (markO) markO.textContent = SKINS[skinIndex].o;
+      if (scoreLabelPlayer) scoreLabelPlayer.textContent = `${nickname} (X)`;
+      if (scoreLabelAi) scoreLabelAi.textContent = 'AI (O)';
+      UI.renderScoreboard(scores);
+      startRound();
+    }
   }
 
+  /** สร้างห้องเล่นออนไลน์ (รองรับทั้ง XO และ หมากฮอส) */
   async function createOnlineRoom() {
     const roomId = Math.floor(1000 + Math.random() * 9000).toString();
     currentRoomId = roomId;
@@ -268,9 +345,17 @@ const App = (() => {
     lastOnlineRound = 1;
     handledEndRound = 0;
 
+    configureBoardView(selectedGame);
+
+    const initialBoard = selectedGame === 'checkers'
+      ? CheckersEngine.createBoard().map(c => c === null ? "" : c)
+      : Array(9).fill("");
+
     await set(ref(db, 'rooms/' + roomId), {
-      board: Array(9).fill(""),
+      game: selectedGame,
+      board: initialBoard,
       turn: 'X',
+      forcedIdx: -1,
       status: 'waiting',
       round: 1,
       players: { X: nickname, O: 'Friend' },
@@ -282,6 +367,7 @@ const App = (() => {
     listenToRoom(roomId);
   }
 
+  /** เข้าร่วมห้องเล่นออนไลน์ */
   async function joinOnlineRoom(roomId) {
     const roomRef = ref(db, 'rooms/' + roomId);
     const snapshot = await get(roomRef);
@@ -300,6 +386,9 @@ const App = (() => {
       showHomeOverlay();
       return;
     }
+
+    const roomGame = data.game || 'xo';
+    configureBoardView(roomGame);
 
     currentRoomId = roomId;
     mySymbol = 'O';
@@ -323,19 +412,28 @@ const App = (() => {
     const firstMoveCtrl = document.getElementById('first-player-control');
     const modeBadge = document.getElementById('mode-badge');
     const oppRole = document.getElementById('opponent-role-label');
+    const markX = document.getElementById('mark-x');
+    const markO = document.getElementById('mark-o');
+
+    const sideText = selectedGame === 'checkers'
+      ? (mySymbol === 'X' ? 'เบี้ยฟ้า' : 'เบี้ยชมพู')
+      : mySymbol;
 
     if (roomBar) roomBar.style.display = 'flex';
-    if (roomInfoText) roomInfoText.textContent = `Room #${roomId} (คุณคือ ${mySymbol})`;
+    if (roomInfoText) roomInfoText.textContent = `Room #${roomId} (คุณคือ ${sideText})`;
     if (copyLinkBtn) copyLinkBtn.style.display = isHost ? 'inline-block' : 'none';
     if (firstMoveCtrl) firstMoveCtrl.style.display = 'none';
     if (modeBadge) modeBadge.textContent = `Online Room #${roomId}`;
     if (oppRole) oppRole.textContent = 'Friend is';
 
-    const markX = document.getElementById('mark-x');
-    const markO = document.getElementById('mark-o');
     if (markX && markO) {
-      markX.textContent = mySymbol === 'X' ? SKINS[skinIndex].x : SKINS[skinIndex].o;
-      markO.textContent = mySymbol === 'X' ? SKINS[skinIndex].o : SKINS[skinIndex].x;
+      if (selectedGame === 'checkers') {
+        markX.textContent = mySymbol === 'X' ? 'เบี้ยฟ้า' : 'เบี้ยชมพู';
+        markO.textContent = mySymbol === 'X' ? 'เบี้ยชมพู' : 'เบี้ยฟ้า';
+      } else {
+        markX.textContent = mySymbol === 'X' ? SKINS[skinIndex].x : SKINS[skinIndex].o;
+        markO.textContent = mySymbol === 'X' ? SKINS[skinIndex].o : SKINS[skinIndex].x;
+      }
     }
   }
 
@@ -347,22 +445,16 @@ const App = (() => {
       const data = snapshot.val();
       if (!data) return;
 
-      const syncedBoard = (data.board || Array(9).fill("")).map(c => c === "" ? null : c);
-      const isBoardChanged = JSON.stringify(board) !== JSON.stringify(syncedBoard);
+      const gameType = data.game || 'xo';
+      const expectedLen = gameType === 'checkers' ? 64 : 9;
+      const syncedBoard = (data.board || Array(expectedLen).fill("")).map(c => c === "" ? null : c);
 
       if (data.round !== lastOnlineRound) {
         lastOnlineRound = data.round;
         handledEndRound = 0;
-        UI.clearHighlights();
+        chkSelectedIdx = null;
+        if (gameType === 'xo') UI.clearHighlights();
         startTimer();
-      }
-
-      if (isBoardChanged) {
-        board = syncedBoard;
-        render();
-        if (board.some(c => c !== null)) {
-          Effects.playMove(data.turn === 'X' ? 'O' : 'X');
-        }
       }
 
       const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
@@ -381,14 +473,16 @@ const App = (() => {
 
       const scoreLabelPlayer = document.getElementById('score-label-player');
       const scoreLabelAi = document.getElementById('score-label-ai');
+      const myTag = gameType === 'checkers' ? (mySymbol === 'X' ? 'ฟ้า' : 'ชมพู') : mySymbol;
+      const oppTag = gameType === 'checkers' ? (oppSymbol === 'X' ? 'ฟ้า' : 'ชมพู') : oppSymbol;
 
       if (scoreLabelPlayer) {
         const streakTag = myStreak >= 2 ? `<span class="streak-pill">🔥${myStreak}</span>` : '';
-        scoreLabelPlayer.innerHTML = `${escapeHtml(myName)} (${mySymbol}) ${streakTag}`;
+        scoreLabelPlayer.innerHTML = `${escapeHtml(myName)} (${myTag}) ${streakTag}`;
       }
       if (scoreLabelAi) {
         const oppStreakTag = oppStreak >= 2 ? `<span class="streak-pill">🔥${oppStreak}</span>` : '';
-        scoreLabelAi.innerHTML = `${escapeHtml(oppName)} (${oppSymbol}) ${oppStreakTag}`;
+        scoreLabelAi.innerHTML = `${escapeHtml(oppName)} (${oppTag}) ${oppStreakTag}`;
       }
 
       if (data.scores) {
@@ -397,6 +491,65 @@ const App = (() => {
           ai: data.scores[oppSymbol] || 0,
           ties: data.scores.ties || 0
         });
+      }
+
+      // แยกจัดการกระดาน Checkers vs XO
+      if (gameType === 'checkers') {
+        chkBoard = syncedBoard;
+        chkTurn = data.turn || 'X';
+        chkForcedIdx = (data.forcedIdx !== undefined && data.forcedIdx >= 0) ? data.forcedIdx : null;
+        if (chkForcedIdx !== null && chkTurn === mySymbol) {
+          chkSelectedIdx = chkForcedIdx;
+        }
+        renderCheckersBoard();
+
+        if (data.status === 'waiting') {
+          currentState = State.ONLINE_WAIT;
+          UI.setStatus(`รอเพื่อนเข้าห้อง... (ส่งลิงก์หรือเลข ${roomId})`);
+          stopTimer();
+          return;
+        }
+
+        const status = CheckersEngine.getGameStatus(chkBoard, chkTurn);
+        if (status.status !== 'in-progress') {
+          currentState = State.GAME_OVER;
+          stopTimer();
+          if (status.winner === mySymbol) {
+            UI.setStatus(`${myName} ชนะ! 🎉`);
+            if (handledEndRound !== data.round) {
+              Effects.playWin();
+              Effects.confettiBurst(getAccentRgb('--accent-x-rgb', '34, 224, 255'));
+            }
+          } else {
+            UI.setStatus(`${oppName} ชนะ!`);
+            if (handledEndRound !== data.round) Effects.playLose();
+          }
+          handledEndRound = data.round;
+          return;
+        }
+
+        if (timerIntervalId === null) startTimer();
+
+        if (chkTurn === mySymbol) {
+          currentState = State.ONLINE_MY_TURN;
+          UI.setStatus(chkForcedIdx !== null ? 'กินต่อเนื่อง! เลือกช่องเดินต่อ' : `ตาของคุณ (${myTag})`);
+        } else {
+          currentState = State.ONLINE_OPPONENT_TURN;
+          chkSelectedIdx = null;
+          renderCheckersBoard();
+          UI.setStatus(`รอ ${oppName} (${oppTag}) เดินหมาก…`);
+        }
+        return;
+      }
+
+      // --- โหมด XO ออนไลน์ ---
+      const isBoardChanged = JSON.stringify(board) !== JSON.stringify(syncedBoard);
+      if (isBoardChanged) {
+        board = syncedBoard;
+        render();
+        if (board.some(c => c !== null)) {
+          Effects.playMove(data.turn === 'X' ? 'O' : 'X');
+        }
       }
 
       if (data.status === 'waiting') {
@@ -456,16 +609,193 @@ const App = (() => {
     currentRoomId = null;
     mySymbol = null;
     window.history.replaceState({}, document.title, window.location.pathname);
+  }
 
-    const markX = document.getElementById('mark-x');
-    const markO = document.getElementById('mark-o');
-    if (markX && markO) {
-      markX.textContent = SKINS[skinIndex].x;
-      markO.textContent = SKINS[skinIndex].o;
+  // ==================== CHECKERS LOGIC & RENDER ====================
+  function startCheckersRound() {
+    chkBoard = CheckersEngine.createBoard();
+    chkTurn = 'X';
+    chkSelectedIdx = null;
+    chkForcedIdx = null;
+    currentState = State.PLAYER_TURN;
+    renderCheckersBoard();
+    startTimer();
+    UI.setStatus('ตาของคุณ (เบี้ยสีฟ้า)');
+  }
+
+  function renderCheckersBoard() {
+    const container = document.getElementById('checkers-board');
+    if (!container) return;
+
+    const mySide = isOnline ? mySymbol : 'X';
+    const canInteract = isOnline ? (currentState === State.ONLINE_MY_TURN) : (currentState === State.PLAYER_TURN);
+    const validMoves = canInteract ? CheckersEngine.getValidMoves(chkBoard, mySide, chkForcedIdx) : [];
+    const targetMovesForSelected = chkSelectedIdx !== null
+      ? validMoves.filter(m => m.from === chkSelectedIdx)
+      : [];
+
+    container.innerHTML = '';
+
+    // ถ้าเล่นออนไลน์ฝั่ง O ให้กลับด้านกระดานให้เบี้ยชมพูอยู่ด้านล่างของจอตัวเอง
+    const flipBoard = isOnline && mySymbol === 'O';
+
+    for (let visualIdx = 0; visualIdx < 64; visualIdx++) {
+      const idx = flipBoard ? (63 - visualIdx) : visualIdx;
+      const r = Math.floor(idx / 8);
+      const c = idx % 8;
+      const isDark = (r + c) % 2 === 1;
+
+      const cell = document.createElement('div');
+      cell.className = `chk-cell ${isDark ? 'dark' : 'light'}`;
+
+      const moveToHere = targetMovesForSelected.find(m => m.to === idx);
+      if (moveToHere) {
+        cell.classList.add('valid-target');
+        cell.addEventListener('click', () => handleCheckersMove(moveToHere));
+      }
+
+      const piece = chkBoard[idx];
+      if (piece) {
+        const owner = CheckersEngine.getOwner(piece);
+        const pieceEl = document.createElement('div');
+        pieceEl.className = `chk-piece ${owner === 'X' ? 'player-x' : 'player-o'}`;
+        if (CheckersEngine.isKing(piece)) pieceEl.classList.add('king');
+        if (chkSelectedIdx === idx) pieceEl.classList.add('selected');
+
+        if (canInteract && owner === mySide) {
+          pieceEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (chkForcedIdx !== null && idx !== chkForcedIdx) return;
+            const hasMoves = validMoves.some(m => m.from === idx);
+            if (hasMoves) {
+              chkSelectedIdx = idx;
+              renderCheckersBoard();
+            } else {
+              UI.setStatus('จังหวะนี้บังคับกิน! กรุณาเลือกตัวที่กินได้');
+            }
+          });
+        }
+        cell.appendChild(pieceEl);
+      }
+
+      container.appendChild(cell);
     }
   }
 
-  async function handleCellClick(index) {
+  async function handleCheckersMove(move) {
+    const result = CheckersEngine.applyMove(chkBoard, move);
+    chkBoard = result.board;
+    Effects.playMove(isOnline ? mySymbol : 'X');
+
+    if (isOnline) {
+      const oppSymbol = mySymbol === 'X' ? 'O' : 'X';
+      const nextTurn = result.canContinueCapture ? mySymbol : oppSymbol;
+      const nextForced = result.canContinueCapture ? result.nextForcedIndex : -1;
+      chkSelectedIdx = result.canContinueCapture ? result.nextForcedIndex : null;
+
+      const updates = {
+        board: chkBoard.map(c => c === null ? "" : c),
+        turn: nextTurn,
+        forcedIdx: nextForced
+      };
+
+      const status = CheckersEngine.getGameStatus(chkBoard, nextTurn);
+      if (status.status === 'win') {
+        const snapshot = await get(ref(db, `rooms/${currentRoomId}`));
+        const roomData = snapshot.val() || {};
+        const currentScores = roomData.scores || { X: 0, O: 0, ties: 0 };
+        const currentStreaks = roomData.streaks || { X: 0, O: 0 };
+        const winner = status.winner;
+        const loser = winner === 'X' ? 'O' : 'X';
+
+        currentScores[winner] = (currentScores[winner] || 0) + 1;
+        currentStreaks[winner] = (currentStreaks[winner] || 0) + 1;
+        currentStreaks[loser] = 0;
+
+        updates.scores = currentScores;
+        updates.streaks = currentStreaks;
+      }
+
+      await update(ref(db, 'rooms/' + currentRoomId), updates);
+      return;
+    }
+
+    // โหมดเล่นกับ AI
+    if (result.canContinueCapture) {
+      chkForcedIdx = result.nextForcedIndex;
+      chkSelectedIdx = result.nextForcedIndex;
+      renderCheckersBoard();
+      UI.setStatus('กินต่อเนื่อง! เลือกช่องเดินต่อ');
+      return;
+    }
+
+    chkForcedIdx = null;
+    chkSelectedIdx = null;
+    renderCheckersBoard();
+
+    const status = CheckersEngine.getGameStatus(chkBoard, 'O');
+    if (status.status === 'win') {
+      endCheckersAiGame(status.winner);
+      return;
+    }
+
+    takeCheckersAiTurn();
+  }
+
+  function takeCheckersAiTurn() {
+    currentState = State.AI_TURN;
+    UI.setStatus('AI กำลังคิด…');
+
+    const stepAi = (forcedIdx = null) => {
+      setTimeout(() => {
+        if (isOnline || selectedGame !== 'checkers') return;
+        const aiMove = CheckersAI.getBestMove(chkBoard, 'O', forcedIdx);
+        if (!aiMove) {
+          endCheckersAiGame('X');
+          return;
+        }
+        const res = CheckersEngine.applyMove(chkBoard, aiMove);
+        chkBoard = res.board;
+        Effects.playMove('O');
+        renderCheckersBoard();
+
+        if (res.canContinueCapture) {
+          stepAi(res.nextForcedIndex);
+          return;
+        }
+
+        const status = CheckersEngine.getGameStatus(chkBoard, 'X');
+        if (status.status === 'win') {
+          endCheckersAiGame(status.winner);
+          return;
+        }
+
+        currentState = State.PLAYER_TURN;
+        UI.setStatus('ตาของคุณ (เบี้ยสีฟ้า)');
+      }, AI_THINK_DELAY_MS);
+    };
+
+    stepAi(null);
+  }
+
+  function endCheckersAiGame(winner) {
+    currentState = State.GAME_OVER;
+    stopTimer();
+    if (winner === 'X') {
+      chkScores.player += 1;
+      UI.setStatus('คุณชนะหมากฮอส! 🎉');
+      Effects.playWin();
+      Effects.confettiBurst(getAccentRgb('--accent-x-rgb', '34, 224, 255'));
+    } else {
+      chkScores.ai += 1;
+      UI.setStatus('AI ชนะ!');
+      Effects.playLose();
+    }
+    UI.renderScoreboard(chkScores);
+  }
+
+  // ==================== TIC-TAC-TOE LOGIC ====================
+  async function handleXoCellClick(index) {
     if (board[index] !== null) return;
 
     if (isOnline) {
@@ -527,14 +857,24 @@ const App = (() => {
       if (data.status === 'waiting') return;
 
       const nextStarter = (data.round % 2 === 1) ? 'O' : 'X';
+      const resetBoard = (data.game === 'checkers')
+        ? CheckersEngine.createBoard().map(c => c === null ? "" : c)
+        : Array(9).fill("");
+
       await update(ref(db, 'rooms/' + currentRoomId), {
-        board: Array(9).fill(""),
+        board: resetBoard,
         turn: nextStarter,
+        forcedIdx: -1,
         round: (data.round || 1) + 1
       });
       return;
     }
-    startRound();
+
+    if (selectedGame === 'checkers') {
+      startCheckersRound();
+    } else {
+      startRound();
+    }
   }
 
   function takeAiTurn() {
@@ -610,13 +950,14 @@ const App = (() => {
   }
 
   function handleFirstPlayerChange(player) {
-    if (isOnline) return;
+    if (isOnline || selectedGame !== 'xo') return;
     firstPlayer = player === 'ai' ? AI_PLAYER : HUMAN_PLAYER;
     UI.setFirstPlayerSelection(player);
     startRound();
   }
 
   function handleCycleSkin() {
+    if (selectedGame !== 'xo') return;
     skinIndex = (skinIndex + 1) % SKINS.length;
     saveSkinIndex(skinIndex);
     UI.applySkin(SKINS[skinIndex]);
@@ -642,8 +983,8 @@ const App = (() => {
     if (overlay && !overlay.classList.contains('hidden')) return;
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
 
-    if (event.key >= '1' && event.key <= '9') {
-      handleCellClick(Number(event.key) - 1);
+    if (selectedGame === 'xo' && event.key >= '1' && event.key <= '9') {
+      handleXoCellClick(Number(event.key) - 1);
       return;
     }
 
